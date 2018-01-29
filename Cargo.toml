@@ -1,0 +1,8 @@
+[package]
+name = "canvas"
+version = "0.1.0"
+authors = ["LongYinan <lynweklm@gmail.com>"]
+
+[dependencies]
+lyon_tessellation = "0.9.1"
+cssparser = "0.23.2"
