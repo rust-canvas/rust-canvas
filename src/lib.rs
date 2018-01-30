@@ -1,6 +1,8 @@
 extern crate cssparser;
+extern crate font_rs;
 
 mod canvas;
+mod csshelper;
 
 pub use canvas::{create_canvas};
 
