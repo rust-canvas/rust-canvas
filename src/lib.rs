@@ -1,6 +1,8 @@
 extern crate cssparser;
 
-pub mod canvas;
+mod canvas;
+
+pub use canvas::{create_canvas};
 
 #[cfg(test)]
 mod create_canvas_test {
