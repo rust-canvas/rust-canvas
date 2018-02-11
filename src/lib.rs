@@ -1,5 +1,5 @@
+extern crate azure;
 extern crate cssparser;
-extern crate font_rs;
 
 mod canvas;
 mod csshelper;

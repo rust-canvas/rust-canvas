@@ -4,6 +4,5 @@ version = "0.1.0"
 authors = ["LongYinan <lynweklm@gmail.com>"]
 
 [dependencies]
-lyon_tessellation = "0.9.1"
-cssparser = "0.23.2"
-font-rs = "0.1.0"
+azure = "0.25"
+cssparser = "0.23"
