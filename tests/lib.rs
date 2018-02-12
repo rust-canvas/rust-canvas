@@ -6,6 +6,6 @@ mod intergration_tests {
 
   #[test]
   fn should_create_canvas() {
-    create_canvas();
+    create_canvas(1920, 1080);
   }
 }

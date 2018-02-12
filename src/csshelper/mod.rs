@@ -11,12 +11,13 @@ pub fn parse_fonts_style(input: &str) -> Font {
   let mut index = 0;
   let mut font_variant = FontVariant::Normal;
   let mut font = None;
+  let mut font_style: FontStyle = FontStyle::Normal;
   while !css_parser.is_exhausted() {
     match css_parser.next() {
       Ok(t) => {
         match t {
           & Token::Dimension { ref value, ref unit, .. } => {
-            let s = unit.deref();
+            let s = unit.deref().to_lowercase();
             // handle others absolute unit here
             if s == "px" {
               font_size = * value;
@@ -28,10 +29,16 @@ pub fn parse_fonts_style(input: &str) -> Font {
             font_familys.push(String::from(d.deref()));
           },
           & Token::Ident(ref d) => {
-            let val = d.deref();
+            let val = d.deref().to_lowercase();
             if index == 0 || index == 1 {
               if val == "small-caps" {
                 font_variant = FontVariant::SmallCaps;
+              } else if val == "italic" {
+                font_style = FontStyle::Italic;
+              } else if val == "oblique" {
+                font_style = FontStyle::Oblique;
+              } else {
+                println!("font style: {} is illegal", val);
               }
             } else {
               font = Some(String::from(val));
@@ -56,14 +63,14 @@ pub fn parse_fonts_style(input: &str) -> Font {
 
   Font {
     font_size,
-    font_style: FontStyle::Normal,
+    font_style,
     font_familys, font_variant,
   }
 }
 
 #[cfg(test)]
 mod parse_fonts_style_tests {
-  use super::{parse_fonts_style};
+  use super::{parse_fonts_style, FontStyle};
   #[test]
   fn should_parse_size_family() {
     let result = parse_fonts_style("2em \"Open Sans\"");
@@ -76,6 +83,7 @@ mod parse_fonts_style_tests {
     let result = parse_fonts_style("italic 2em \"Open Sans\"");
     assert_eq!(result.font_familys, vec![String::from("Open Sans")]);
     assert_eq!(result.font_size, 32 as f32);
+    assert_eq!(result.font_style, FontStyle::Italic);
   }
 
   #[test]
