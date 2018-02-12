@@ -1,35 +1,51 @@
 mod font;
 
 use std::default::Default;
-use azure::azure_hl::{Pattern, ColorPattern, Color};
+use azure::azure_hl::{Pattern, ColorPattern, Color, StrokeOptions, JoinStyle, CapStyle, DrawOptions};
+use azure::azure_hl::{AntialiasMode, CompositionOp};
 use azure::{AzFloat};
+use euclid::{Transform2D};
 use cssparser::{RGBA};
+use super::context_2d::{ToAzureStyle};
 pub use self::font::*;
 
-#[derive(Debug)]
-pub struct PaintState {
+#[derive(Debug, Clone)]
+pub struct PaintState<'a> {
+  pub draw_options: DrawOptions,
   pub fill_style: Pattern,
+  pub stroke_style: Pattern,
+  pub stroke_opts: StrokeOptions<'a>,
   pub font: Font,
+  pub transform: Transform2D<f32>,
+  pub shadow_offset_x: f64,
+  pub shadow_offset_y: f64,
+  pub shadow_blur: f64,
+  pub shadow_color: Color,
 }
 
-impl Default for PaintState {
+impl <'a> Default for PaintState<'a> {
   fn default() -> Self {
+    let fill_style = Pattern::Color(ColorPattern::new(RGBA::new(0, 0, 0, 1).to_azure_style()));
+    let stroke_style = fill_style.clone();
     PaintState {
-      fill_style: Pattern::Color(ColorPattern::new(RGBA::new(0, 0, 0, 1).to_azure_style())),
+      draw_options: DrawOptions::new(1.0, CompositionOp::Over, AntialiasMode::Default),
+      fill_style,
+      stroke_style,
+      stroke_opts: StrokeOptions::new(1.0, JoinStyle::MiterOrBevel, CapStyle::Butt, 10.0, &[]),
       font: Font::new("10px sans-serif"),
+      transform: Transform2D::identity(),
+      shadow_offset_x: 0.0,
+      shadow_offset_y: 0.0,
+      shadow_blur: 0.0,
+      shadow_color: Color::transparent(),
     }
   }
 }
 
-impl PaintState {
-  pub fn new() -> PaintState {
+impl <'a> PaintState <'a> {
+  pub fn new() -> PaintState<'a> {
     PaintState::default()
   }
-}
-
-pub trait ToAzureStyle {
-    type Target;
-    fn to_azure_style(self) -> Self::Target;
 }
 
 impl ToAzureStyle for RGBA {
@@ -60,6 +76,16 @@ mod paint_state_test {
   fn paint_state_default_check() {
     let state = PaintState::default();
     match state.fill_style {
+      Pattern::Color(c) => {
+        let color: Color = unsafe {
+          let color_pattern: TestColorPattern = mem::transmute(c);
+          color_pattern.color
+        };
+        assert_eq!(color, RGBA::new(0, 0, 0, 1).to_azure_style());
+      },
+      _ => assert!(false),
+    };
+    match state.stroke_style {
       Pattern::Color(c) => {
         let color: Color = unsafe {
           let color_pattern: TestColorPattern = mem::transmute(c);

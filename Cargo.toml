@@ -5,4 +5,8 @@ authors = ["LongYinan <lynweklm@gmail.com>"]
 
 [dependencies]
 azure = "0.25"
-cssparser = "0.23"
+cssparser = { version = "0.23", features = ["serde"] }
+euclid = "0.16"
+num-traits = "0.1.32"
+serde = "1.0"
+serde_derive = "1.0"

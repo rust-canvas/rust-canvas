@@ -36,6 +36,21 @@ jobs:
           name: Print version information
           command: rustc --version; cargo --version
       - run:
+          name: Prepare build env
+          command: |
+            apt-get update && \
+            apt-get install -y \
+              cmake \
+              freeglut3-dev \
+              gperf \
+              libosmesa6-dev \
+              libgles2-mesa-dev \
+              python-virtualenv \
+              xorg-dev \
+              ccache \
+              libdbus-glib-1-dev \
+              libedit-dev
+      - run:
           name: Build and test
           command: cargo test --verbose --frozen
           environment:
@@ -66,6 +81,21 @@ jobs:
           name: Print version information
           command: rustc --version; cargo --version
       - run:
+          name: Prepare build env
+          command: |
+            apt-get update && \
+            apt-get install -y \
+              cmake \
+              freeglut3-dev \
+              gperf \
+              libosmesa6-dev \
+              libgles2-mesa-dev \
+              python-virtualenv \
+              xorg-dev \
+              ccache \
+              libdbus-glib-1-dev \
+              libedit-dev
+      - run:
           name: Build and test in release profile
           command: cargo test --verbose --frozen --release
   test_nightly:
@@ -83,6 +113,21 @@ jobs:
           name: Print version information
           command: rustc --version; cargo --version
       - run:
+          name: Prepare build env
+          command: |
+            apt-get update && \
+            apt-get install -y \
+              cmake \
+              freeglut3-dev \
+              gperf \
+              libosmesa6-dev \
+              libgles2-mesa-dev \
+              python-virtualenv \
+              xorg-dev \
+              ccache \
+              libdbus-glib-1-dev \
+              libedit-dev
+      - run:
           name: Build and test with nightly Rust
           command: cargo test --verbose --frozen
   coverage:
@@ -95,6 +140,21 @@ jobs:
       - attach_workspace:
           at: "."
       - run: mkdir target/coverage
+      - run:
+          name: Prepare coverage env
+          command: |
+            apt-get update && \
+            apt-get install -y \
+              cmake \
+              freeglut3-dev \
+              gperf \
+              libosmesa6-dev \
+              libgles2-mesa-dev \
+              python-virtualenv \
+              xorg-dev \
+              ccache \
+              libdbus-glib-1-dev \
+              libedit-dev
       - run:
           name: Rerun the tests collecting coverage
           command: |

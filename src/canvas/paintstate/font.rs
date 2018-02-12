@@ -1,6 +1,6 @@
 use csshelper::{parse_fonts_style};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Font {
   pub font_size: f32,
   pub font_style: FontStyle,
@@ -14,14 +14,14 @@ impl Font {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FontStyle {
   Normal,
   Italic,
   Oblique,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FontVariant {
   Normal,
   SmallCaps,
