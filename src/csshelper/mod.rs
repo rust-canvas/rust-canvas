@@ -33,12 +33,15 @@ pub fn parse_fonts_style(input: &str) -> Font {
             if index == 0 || index == 1 {
               if val == "small-caps" {
                 font_variant = FontVariant::SmallCaps;
-              } else if val == "italic" {
-                font_style = FontStyle::Italic;
-              } else if val == "oblique" {
-                font_style = FontStyle::Oblique;
-              } else {
-                println!("font style: {} is illegal", val);
+              }
+              if index == 0 {
+                if val == "italic" {
+                  font_style = FontStyle::Italic;
+                } else if val == "oblique" {
+                  font_style = FontStyle::Oblique;
+                } else {
+                  println!("font style: {} is illegal", val);
+                }
               }
             } else {
               font = Some(String::from(val));
