@@ -4,7 +4,7 @@ use csshelper::{parse_fonts_style};
 pub struct Font {
   pub font_size: f32,
   pub font_style: FontStyle,
-  pub font_familys: Vec<String>,
+  pub font_family: String,
   pub font_variant: FontVariant,
 }
 
