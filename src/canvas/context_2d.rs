@@ -431,92 +431,96 @@ impl <'a> Context2d<'a> {
     }
   }
 
+  pub fn create_linear_gradient(&self, linear_gradient_style: LinearGradientStyle) -> LinearGradientPattern {
+    create_linear_gradient(&linear_gradient_style, &self.drawtarget)
+  }
+
   // https://html.spec.whatwg.org/multipage/#dom-context-2d-putimagedata
   pub fn put_image_data(&mut self, imagedata: Vec<u8>,
                     offset: Vector2D<f64>,
                     image_data_size: Size2D<f64>,
                     mut dirty_rect: Rect<f64>) {
-      if image_data_size.width <= 0.0 || image_data_size.height <= 0.0 {
-          return
-      }
+    if image_data_size.width <= 0.0 || image_data_size.height <= 0.0 {
+        return
+    }
 
-      assert_eq!(image_data_size.width * image_data_size.height * 4.0, imagedata.len() as f64);
+    assert_eq!(image_data_size.width * image_data_size.height * 4.0, imagedata.len() as f64);
 
-      // Step 1. TODO (neutered data)
+    // Step 1. TODO (neutered data)
 
-      // Step 2.
-      if dirty_rect.size.width < 0.0f64 {
-          dirty_rect.origin.x += dirty_rect.size.width;
-          dirty_rect.size.width = -dirty_rect.size.width;
-      }
+    // Step 2.
+    if dirty_rect.size.width < 0.0f64 {
+        dirty_rect.origin.x += dirty_rect.size.width;
+        dirty_rect.size.width = -dirty_rect.size.width;
+    }
 
-      if dirty_rect.size.height < 0.0f64 {
-          dirty_rect.origin.y += dirty_rect.size.height;
-          dirty_rect.size.height = -dirty_rect.size.height;
-      }
+    if dirty_rect.size.height < 0.0f64 {
+        dirty_rect.origin.y += dirty_rect.size.height;
+        dirty_rect.size.height = -dirty_rect.size.height;
+    }
 
-      // Step 3.
-      if dirty_rect.origin.x < 0.0f64 {
-          dirty_rect.size.width += dirty_rect.origin.x;
-          dirty_rect.origin.x = 0.0f64;
-      }
+    // Step 3.
+    if dirty_rect.origin.x < 0.0f64 {
+        dirty_rect.size.width += dirty_rect.origin.x;
+        dirty_rect.origin.x = 0.0f64;
+    }
 
-      if dirty_rect.origin.y < 0.0f64 {
-          dirty_rect.size.height += dirty_rect.origin.y;
-          dirty_rect.origin.y = 0.0f64;
-      }
+    if dirty_rect.origin.y < 0.0f64 {
+        dirty_rect.size.height += dirty_rect.origin.y;
+        dirty_rect.origin.y = 0.0f64;
+    }
 
-      // Step 4.
-      if dirty_rect.max_x() > image_data_size.width {
-          dirty_rect.size.width = image_data_size.width - dirty_rect.origin.x;
-      }
+    // Step 4.
+    if dirty_rect.max_x() > image_data_size.width {
+        dirty_rect.size.width = image_data_size.width - dirty_rect.origin.x;
+    }
 
-      if dirty_rect.max_y() > image_data_size.height {
-          dirty_rect.size.height = image_data_size.height - dirty_rect.origin.y;
-      }
+    if dirty_rect.max_y() > image_data_size.height {
+        dirty_rect.size.height = image_data_size.height - dirty_rect.origin.y;
+    }
 
-      // 5) If either dirtyWidth or dirtyHeight is negative or zero,
-      // stop without affecting any bitmaps
-      if dirty_rect.size.width <= 0.0 || dirty_rect.size.height <= 0.0 {
-          return
-      }
+    // 5) If either dirtyWidth or dirtyHeight is negative or zero,
+    // stop without affecting any bitmaps
+    if dirty_rect.size.width <= 0.0 || dirty_rect.size.height <= 0.0 {
+        return
+    }
 
-      // Step 6.
-      let dest_rect = dirty_rect.translate(&offset).to_i32();
+    // Step 6.
+    let dest_rect = dirty_rect.translate(&offset).to_i32();
 
-      // azure_hl operates with integers. We need to cast the image size
-      let image_size = image_data_size.to_i32();
+    // azure_hl operates with integers. We need to cast the image size
+    let image_size = image_data_size.to_i32();
 
-      let first_pixel = dest_rect.origin - offset.to_i32();
-      let mut src_line = (first_pixel.y * (image_size.width * 4) + first_pixel.x * 4) as usize;
+    let first_pixel = dest_rect.origin - offset.to_i32();
+    let mut src_line = (first_pixel.y * (image_size.width * 4) + first_pixel.x * 4) as usize;
 
-      let mut dest =
-          Vec::with_capacity((dest_rect.size.width * dest_rect.size.height * 4) as usize);
+    let mut dest =
+        Vec::with_capacity((dest_rect.size.width * dest_rect.size.height * 4) as usize);
 
-      for _ in 0 .. dest_rect.size.height {
-          let mut src_offset = src_line;
-          for _ in 0 .. dest_rect.size.width {
-              let alpha = imagedata[src_offset + 3] as u16;
-              // add 127 before dividing for more accurate rounding
-              let premultiply_channel = |channel: u8| (((channel as u16 * alpha) + 127) / 255) as u8;
-              dest.push(premultiply_channel(imagedata[src_offset + 2]));
-              dest.push(premultiply_channel(imagedata[src_offset + 1]));
-              dest.push(premultiply_channel(imagedata[src_offset + 0]));
-              dest.push(imagedata[src_offset + 3]);
-              src_offset += 4;
-          }
-          src_line += (image_size.width * 4) as usize;
-      }
+    for _ in 0 .. dest_rect.size.height {
+        let mut src_offset = src_line;
+        for _ in 0 .. dest_rect.size.width {
+            let alpha = imagedata[src_offset + 3] as u16;
+            // add 127 before dividing for more accurate rounding
+            let premultiply_channel = |channel: u8| (((channel as u16 * alpha) + 127) / 255) as u8;
+            dest.push(premultiply_channel(imagedata[src_offset + 2]));
+            dest.push(premultiply_channel(imagedata[src_offset + 1]));
+            dest.push(premultiply_channel(imagedata[src_offset + 0]));
+            dest.push(imagedata[src_offset + 3]);
+            src_offset += 4;
+        }
+        src_line += (image_size.width * 4) as usize;
+    }
 
-      if let Some(source_surface) = self.drawtarget.create_source_surface_from_data(
-              &dest,
-              dest_rect.size,
-              dest_rect.size.width * 4,
-              SurfaceFormat::B8G8R8A8) {
-          self.drawtarget.copy_surface(source_surface,
-                                        Rect::new(Point2D::new(0, 0), dest_rect.size),
-                                        dest_rect.origin);
-      }
+    if let Some(source_surface) = self.drawtarget.create_source_surface_from_data(
+            &dest,
+            dest_rect.size,
+            dest_rect.size.width * 4,
+            SurfaceFormat::B8G8R8A8) {
+        self.drawtarget.copy_surface(source_surface,
+                                      Rect::new(Point2D::new(0, 0), dest_rect.size),
+                                      dest_rect.origin);
+    }
   }
 
   pub fn image_data(&self, dest_rect: Rect<i32>, canvas_size: Size2D<f64>) -> Vec<u8> {
@@ -589,27 +593,27 @@ impl RectToi32 for Rect<f64> {
 fn crop_image(image_data: Vec<u8>,
               image_size: Size2D<f64>,
               crop_rect: Rect<f64>) -> Vec<u8>{
-    // We're going to iterate over a pixel values array so we need integers
-    let crop_rect = crop_rect.to_i32();
-    let image_size = image_size.to_i32();
-    // Assuming 4 bytes per pixel and row-major order for storage
-    // (consecutive elements in a pixel row of the image are contiguous in memory)
-    let stride = image_size.width * 4;
-    let image_bytes_length = image_size.height * image_size.width * 4;
-    let crop_area_bytes_length = crop_rect.size.height * crop_rect.size.width * 4;
-    // If the image size is less or equal than the crop area we do nothing
-    if image_bytes_length <= crop_area_bytes_length {
-        return image_data;
-    }
+  // We're going to iterate over a pixel values array so we need integers
+  let crop_rect = crop_rect.to_i32();
+  let image_size = image_size.to_i32();
+  // Assuming 4 bytes per pixel and row-major order for storage
+  // (consecutive elements in a pixel row of the image are contiguous in memory)
+  let stride = image_size.width * 4;
+  let image_bytes_length = image_size.height * image_size.width * 4;
+  let crop_area_bytes_length = crop_rect.size.height * crop_rect.size.width * 4;
+  // If the image size is less or equal than the crop area we do nothing
+  if image_bytes_length <= crop_area_bytes_length {
+      return image_data;
+  }
 
-    let mut new_image_data = Vec::new();
-    let mut src = (crop_rect.origin.y * stride + crop_rect.origin.x * 4) as usize;
-    for _ in 0..crop_rect.size.height {
-        let row = &image_data[src .. src + (4 * crop_rect.size.width) as usize];
-        new_image_data.extend_from_slice(row);
-        src += stride as usize;
-    }
-    new_image_data
+  let mut new_image_data = Vec::new();
+  let mut src = (crop_rect.origin.y * stride + crop_rect.origin.x * 4) as usize;
+  for _ in 0..crop_rect.size.height {
+      let row = &image_data[src .. src + (4 * crop_rect.size.width) as usize];
+      new_image_data.extend_from_slice(row);
+      src += stride as usize;
+  }
+  new_image_data
 }
 
 /// It writes an image to the destination target
@@ -696,18 +700,9 @@ impl ToAzurePattern for FillOrStrokeStyle {
         Some(Pattern::Color(ColorPattern::new(color.to_azure_style())))
       },
       FillOrStrokeStyle::LinearGradient(ref linear_gradient_style) => {
-        let gradient_stops: Vec<GradientStop> = linear_gradient_style.stops.iter().map(|s| {
-          GradientStop {
-            offset: s.offset as AzFloat,
-            color: s.color.to_azure_style()
-          }
-        }).collect();
+        let linear_gradient = create_linear_gradient(linear_gradient_style, drawtarget);
 
-        Some(Pattern::LinearGradient(LinearGradientPattern::new(
-            &Point2D::new(linear_gradient_style.x0 as AzFloat, linear_gradient_style.y0 as AzFloat),
-            &Point2D::new(linear_gradient_style.x1 as AzFloat, linear_gradient_style.y1 as AzFloat),
-            drawtarget.create_gradient_stops(&gradient_stops, ExtendMode::Clamp),
-            &Transform2D::identity())))
+        Some(Pattern::LinearGradient(linear_gradient))
       },
       FillOrStrokeStyle::RadialGradient(ref radial_gradient_style) => {
         let gradient_stops: Vec<GradientStop> = radial_gradient_style.stops.iter().map(|s| {
@@ -820,6 +815,23 @@ pub fn byte_swap(data: &mut [u8]) {
     data[i + 0] = r;
     i += 4;
   }
+}
+
+fn create_linear_gradient(
+  linear_gradient_style: &LinearGradientStyle,
+  drawtarget: &DrawTarget) -> LinearGradientPattern {
+  let gradient_stops: Vec<GradientStop> = linear_gradient_style.stops.iter().map(|s| {
+    GradientStop {
+      offset: s.offset as AzFloat,
+      color: s.color.to_azure_style()
+    }
+  }).collect();
+  LinearGradientPattern::new(
+    &Point2D::new(linear_gradient_style.x0 as AzFloat, linear_gradient_style.y0 as AzFloat),
+    &Point2D::new(linear_gradient_style.x1 as AzFloat, linear_gradient_style.y1 as AzFloat),
+    drawtarget.create_gradient_stops(&gradient_stops, ExtendMode::Clamp),
+    &Transform2D::identity()
+  )
 }
 
 #[cfg(test)]
