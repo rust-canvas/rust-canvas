@@ -1,4 +1,5 @@
 use std::mem;
+use std::sync::Arc;
 
 use azure::azure_hl::JoinStyle;
 use azure::azure_hl::GradientStop;
@@ -9,7 +10,9 @@ use azure::azure_hl::{PathBuilder, CapStyle, StrokeOptions};
 use azure::{AzFloat};
 use euclid::{Rect, Point2D, Vector2D, Transform2D, Size2D};
 use num_traits::ToPrimitive;
+use pathfinder_font_renderer::{FontContext, FontKey};
 
+use fontrenderer::{create_context};
 use super::canvas_trait::*;
 use super::paintstate::{PaintState};
 
@@ -18,6 +21,7 @@ pub struct Context2d<'a> {
   saved_states: Vec<PaintState<'a>>,
   drawtarget: DrawTarget,
   path_builder: PathBuilder,
+  font_context: FontContext,
 }
 
 impl <'a> Context2d<'a> {
@@ -56,6 +60,15 @@ impl <'a> Context2d<'a> {
       saved_states: vec![],
       drawtarget,
       path_builder,
+      font_context: create_context(),
+    }
+  }
+
+  pub fn add_font_instance(&mut self, bytes: Vec<u8>) -> Result<FontKey, ()> {
+    let font_key = FontKey::new();
+    match self.font_context.add_font_from_memory(&font_key, Arc::new(bytes), 0) {
+      Ok(_) => { Ok(font_key) },
+      Err(e) => { panic!(e) },
     }
   }
 
