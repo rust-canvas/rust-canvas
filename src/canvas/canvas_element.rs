@@ -1,5 +1,3 @@
-use euclid::{Rect, Size2D};
-
 use super::context_2d::{Context2d};
 
 pub struct CanvasElement {
@@ -25,10 +23,6 @@ impl <'a> CanvasElement {
       },
       _ => None,
     }
-  }
-
-  pub fn image_data(&self, dest_rect: Rect<i32>, canvas_size: Size2D<f64>) -> Vec<u8> {
-    self.ctx.image_data(dest_rect, canvas_size)
   }
 }
 
