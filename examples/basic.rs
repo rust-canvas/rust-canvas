@@ -13,8 +13,8 @@ use image::{ColorType};
 use rustcanvas::{create_canvas, CanvasContextType, FillOrStrokeStyle};
 
 fn main() {
-  let canvas = create_canvas(1920, 1080);
-  let mut ctx = canvas.get_context(CanvasContextType::CTX2D).unwrap();
+  let canvas = create_canvas(1920, 1080, CanvasContextType::CTX2D);
+  let mut ctx = canvas.ctx;
   ctx.set_line_width(10.0);
   ctx.set_stroke_style(FillOrStrokeStyle::Color(RGBA::new(66, 165, 245, 100)));
   ctx.move_to(&Point2D::new(100.0, 100.0));

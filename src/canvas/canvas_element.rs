@@ -1,9 +1,11 @@
+use euclid::{Rect, Size2D};
+
 use super::context_2d::{Context2d};
 
-#[derive(Debug)]
 pub struct CanvasElement {
   pub width: i32,
   pub height: i32,
+  pub ctx: Context2d<'static>,
 }
 
 #[derive(Debug)]
@@ -15,15 +17,18 @@ pub enum CanvasContextType {
 }
 
 impl <'a> CanvasElement {
-  pub fn new(width: i32, height: i32) -> CanvasElement {
-    CanvasElement { width, height }
-  }
-
-  pub fn get_context(&'a self, context_type: CanvasContextType) -> Option<Context2d> {
+  pub fn new(width: i32, height: i32, context_type: CanvasContextType) -> Option<CanvasElement> {
     match context_type {
-      CanvasContextType::CTX2D => Some(Context2d::new(&self)),
+      CanvasContextType::CTX2D => {
+        let ctx = Context2d::new(width, height);
+        Some(CanvasElement { width, height, ctx })
+      },
       _ => None,
     }
+  }
+
+  pub fn image_data(&self, dest_rect: Rect<i32>, canvas_size: Size2D<f64>) -> Vec<u8> {
+    self.ctx.image_data(dest_rect, canvas_size)
   }
 }
 
@@ -32,14 +37,13 @@ mod canvas_element_tests {
   use super::*;
   #[test]
   fn should_new_canvas() {
-    CanvasElement::new(1920, 1080);
+    CanvasElement::new(1920, 1080, CanvasContextType::CTX2D);
   }
 
   #[test]
   fn should_get_context_2d() {
-    let element = CanvasElement::new(1920, 1080);
-    let ctx = element.get_context(CanvasContextType::CTX2D);
-    match ctx {
+    let element = CanvasElement::new(1920, 1080, CanvasContextType::CTX2D);
+    match element {
       Some(_) => assert!(true),
       None => assert!(false),
     };
@@ -47,9 +51,8 @@ mod canvas_element_tests {
 
   #[test]
   fn should_get_none_if_context_type_mismatch() {
-    let element = CanvasElement::new(1920, 1080);
-    let ctx = element.get_context(CanvasContextType::WEBGL2);
-    match ctx {
+    let element = CanvasElement::new(1920, 1080, CanvasContextType::WEBGL2);
+    match element {
       Some(_) => assert!(false),
       None => assert!(true),
     };

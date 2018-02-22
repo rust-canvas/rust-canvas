@@ -12,9 +12,9 @@ pub use canvas::*;
 
 #[cfg(test)]
 mod create_canvas_test {
-  use canvas::{create_canvas};
+  use canvas::{create_canvas, CanvasContextType};
   #[test]
   fn should_create_canvas() {
-    create_canvas(1920, 1080);
+    create_canvas(1920, 1080, CanvasContextType::CTX2D);
   }
 }

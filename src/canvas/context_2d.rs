@@ -10,12 +10,10 @@ use azure::{AzFloat};
 use euclid::{Rect, Point2D, Vector2D, Transform2D, Size2D};
 use num_traits::ToPrimitive;
 
-use super::canvas_element::{CanvasElement};
 use super::canvas_trait::*;
 use super::paintstate::{PaintState};
 
 pub struct Context2d<'a> {
-  pub canvas: Option<&'a CanvasElement>,
   pub state: PaintState<'a>,
   saved_states: Vec<PaintState<'a>>,
   drawtarget: DrawTarget,
@@ -50,13 +48,10 @@ impl <'a> Context2d<'a> {
     image_data
   }
 
-  pub fn new(canvas: &'a CanvasElement) -> Context2d {
-    let width = canvas.width;
-    let height = canvas.height;
+  pub fn new(width: i32, height: i32) -> Context2d<'a> {
     let drawtarget = DrawTarget::new(BackendType::Skia, Size2D::new(width, height), SurfaceFormat::B8G8R8A8);
     let path_builder = drawtarget.create_path_builder();
     Context2d {
-      canvas: Some(canvas),
       state: PaintState::new(),
       saved_states: vec![],
       drawtarget,
@@ -825,11 +820,9 @@ pub fn byte_swap(data: &mut [u8]) {
 #[cfg(test)]
 mod context_2d_test {
   use super::{Context2d};
-  use super::super::{create_canvas};
 
   #[test]
   fn new_context_2d_check() {
-    let canvas = &create_canvas(1920, 1080);
-    Context2d::new(canvas);
+    Context2d::new(1920, 1080);
   }
 }
