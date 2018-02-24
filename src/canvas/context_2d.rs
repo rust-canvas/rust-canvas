@@ -1,6 +1,10 @@
+use std::cell::RefCell;
+use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
 use std::mem;
 use std::sync::Arc;
 
+use app_units::Au;
 use azure::azure_hl::JoinStyle;
 use azure::azure_hl::GradientStop;
 use azure::azure_hl::{Pattern, DrawTarget, BackendType, SurfaceFormat, DrawSurfaceOptions};
@@ -9,10 +13,12 @@ use azure::azure_hl::{LinearGradientPattern, ExtendMode, RadialGradientPattern, 
 use azure::azure_hl::{PathBuilder, CapStyle, StrokeOptions};
 use azure::{AzFloat};
 use euclid::{Rect, Point2D, Vector2D, Transform2D, Size2D};
+use fonts::system_fonts;
+use lyon_path::{PathEvent};
 use num_traits::ToPrimitive;
-use pathfinder_font_renderer::{FontContext, FontKey};
+use pathfinder_font_renderer::{FontContext, FontKey, FontInstance, GlyphKey, SubpixelOffset};
 
-use fontrenderer::{create_context};
+use fontrenderer::{flip_text};
 use super::canvas_trait::*;
 use super::paintstate::{PaintState};
 
@@ -21,7 +27,8 @@ pub struct Context2d<'a> {
   saved_states: Vec<PaintState<'a>>,
   drawtarget: DrawTarget,
   path_builder: PathBuilder,
-  font_context: FontContext,
+  font_context: RefCell<FontContext>,
+  font_caches: BTreeMap<String, FontKey>,
 }
 
 impl <'a> Context2d<'a> {
@@ -55,20 +62,37 @@ impl <'a> Context2d<'a> {
   pub fn new(width: i32, height: i32) -> Context2d<'a> {
     let drawtarget = DrawTarget::new(BackendType::Skia, Size2D::new(width, height), SurfaceFormat::B8G8R8A8);
     let path_builder = drawtarget.create_path_builder();
-    Context2d {
+
+    let mut ctx = Context2d {
       state: PaintState::new(),
       saved_states: vec![],
       drawtarget,
       path_builder,
-      font_context: create_context(),
-    }
+      font_context: RefCell::new(FontContext::new().expect("init FontContext fail")),
+      font_caches: BTreeMap::new(),
+    };
+    system_fonts::query_all().into_iter().for_each(|font| {
+      let font_property = system_fonts::FontPropertyBuilder::new().family(&font).build();
+      let (buffer, _) = system_fonts::get(&font_property).unwrap();
+      ctx.add_font_instance(buffer, font).unwrap();
+    });
+
+    ctx
   }
 
-  pub fn add_font_instance(&mut self, bytes: Vec<u8>) -> Result<FontKey, ()> {
-    let font_key = FontKey::new();
-    match self.font_context.add_font_from_memory(&font_key, Arc::new(bytes), 0) {
-      Ok(_) => { Ok(font_key) },
-      Err(e) => { panic!(e) },
+  pub fn add_font_instance(&mut self, bytes: Vec<u8>, family_name: String) -> Result<(), ()> {
+    match self.font_caches.entry(family_name) {
+      Entry::Occupied(_) => Ok(()),
+      Entry::Vacant(entry) => {
+        let font_key = FontKey::new();
+        match self.font_context.borrow_mut().add_font_from_memory(&font_key, Arc::new(bytes), 0) {
+          Ok(_) => {
+            entry.insert(font_key);
+            Ok(())
+          },
+          Err(e) => panic!(e),
+        }
+      }
     }
   }
 
@@ -84,8 +108,75 @@ impl <'a> Context2d<'a> {
     }
   }
 
-  pub fn fill_text(&self, text: String, x: f64, y: f64, max_width: Option<f64>) {
-    panic!("Unimplemented canvas2d.fillText. Values received: {}, {}, {}, {:?}.", text, x, y, max_width);
+  pub fn fill_text(&mut self, text: String, x: f32, y: f32, max_width: Option<f32>) {
+    let font = &self.state.font;
+    let family = &font.font_family;
+    let font_keys = &self.font_caches;
+    let size = &font.font_size;
+    let font_key = match font_keys.get(family) {
+      Some(f) => f,
+      None => font_keys.get("PingFang TC").unwrap(),
+    };
+    let instance = FontInstance::new(&font_key, Au(* size as i32 * 1600));
+    let mut offset_x = x;
+    let scale = match max_width {
+      Some(m) => {
+        let total_width = text.chars().map(|c| {
+          let font_context = self.font_context.borrow();
+          let pos = font_context.get_char_index(&font_key, c).unwrap();
+          let glyph_key = GlyphKey::new(pos, SubpixelOffset(0));
+          let glyph_dimensions = font_context.glyph_dimensions(&instance, &glyph_key).unwrap();
+          glyph_dimensions.advance
+        }).sum::<f32>();
+        if total_width > m {
+          m / total_width
+        } else {
+          1.0
+        }
+      },
+      None => 1.0,
+    };
+    text.chars().for_each(|c| {
+      let (text_width, text_height, advance_offset, glyph_key) = {
+        let font_context = self.font_context.borrow();
+        let pos = font_context.get_char_index(&font_key, c).unwrap();
+        let glyph_key = GlyphKey::new(pos, SubpixelOffset(0));
+        let glyph_dimensions = font_context.glyph_dimensions(&instance, &glyph_key).unwrap();
+        let text_width = glyph_dimensions.size.width;
+        let text_height = glyph_dimensions.size.height;
+        let advance = glyph_dimensions.advance;
+        let advance_offset = (advance - text_width as f32) / 2.0 * scale;
+        offset_x = offset_x + advance_offset;
+        (text_width as f32 * scale, text_height as f32, advance_offset, glyph_key)
+      };
+      {
+        let mut mut_font_context = self.font_context.borrow_mut();
+        let glyph_outline = mut_font_context.glyph_outline(&instance, &glyph_key).unwrap();
+        glyph_outline.iter()
+          .map(|e| flip_text(scale)(e))
+          .for_each(|f| match f {
+            PathEvent::MoveTo(p) => self.move_to(
+              &Point2D::new(p.x + offset_x, p.y + y)
+            ),
+            PathEvent::LineTo(p) => self.line_to(&Point2D::new(p.x + offset_x, p.y + y)),
+            PathEvent::QuadraticTo(cp, ep) => self.quadratic_curve_to(
+              &Point2D::new(cp.x + offset_x, cp.y + y), &Point2D::new(ep.x + offset_x, ep.y + y)
+            ),
+            PathEvent::Close => self.close_path(),
+            PathEvent::CubicTo(cp1, cp2, ep) => self.bezier_curve_to(
+              &Point2D::new(cp1.x + offset_x, cp1.y + y),
+              &Point2D::new(cp2.x + offset_x, cp2.y + y),
+              &Point2D::new(ep.x + offset_x, ep.y + y)
+            ),
+            PathEvent::Arc(c, r, s, e) => self.arc(
+              &Point2D::new(c.x + offset_x, c.y + y),
+              r.angle_from_x_axis().get(), s.get(), e.get(), false
+            )
+          });
+      };
+      offset_x = offset_x + advance_offset + text_width;
+    });
+    self.fill();
   }
 
   pub fn fill_rect(&self, rect: &Rect<f32>) {
@@ -135,8 +226,8 @@ impl <'a> Context2d<'a> {
       });
     } else if rect.size.width == 0. || rect.size.height == 0. {
       let cap = match self.state.stroke_opts.line_join {
-          JoinStyle::Round => CapStyle::Round,
-          _ => CapStyle::Butt
+        JoinStyle::Round => CapStyle::Round,
+        _ => CapStyle::Butt
       };
 
       let stroke_opts =

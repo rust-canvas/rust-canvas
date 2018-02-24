@@ -1,6 +1,9 @@
+extern crate app_units;
 extern crate azure;
-extern crate euclid;
 extern crate cssparser;
+extern crate euclid;
+extern crate font_loader as fonts;
+extern crate lyon_path;
 extern crate num_traits;
 extern crate pathfinder_font_renderer;
 extern crate serde;
