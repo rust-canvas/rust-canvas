@@ -1,12 +1,17 @@
+extern crate app_units;
 extern crate azure;
-extern crate euclid;
 extern crate cssparser;
+extern crate euclid;
+extern crate font_loader as fonts;
+extern crate lyon_path;
 extern crate num_traits;
+extern crate pathfinder_font_renderer;
 extern crate serde;
 #[macro_use] extern crate serde_derive;
 
 mod canvas;
 mod csshelper;
+mod fontrenderer;
 
 pub use canvas::*;
 
