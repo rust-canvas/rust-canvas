@@ -115,7 +115,7 @@ mod parse_fonts_style_tests {
   #[test]
   fn should_parse_style_variant_weight_size_lineheight_family() {
     let result = parse_fonts_style("italic small-caps bolder 16px/3 cursive");
-    assert_eq!(result.font_family, String::from("cursive"));
+    assert_eq!(result.font_family, String::from(CURSIVE_FONT_FAMILY));
     assert_eq!(result.font_size, 16 as f32);
     assert_eq!(result.font_variant, FontVariant::SmallCaps);
   }
