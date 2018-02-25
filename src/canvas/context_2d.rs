@@ -20,7 +20,7 @@ use pathfinder_font_renderer::{FontContext, FontKey, FontInstance, GlyphKey, Sub
 
 use fontrenderer::{flip_text};
 use super::canvas_trait::*;
-use super::paintstate::{PaintState};
+use super::paintstate::{Font, PaintState};
 
 pub struct Context2d<'a> {
   pub state: PaintState<'a>,
@@ -109,6 +109,16 @@ impl <'a> Context2d<'a> {
   }
 
   pub fn fill_text(&mut self, text: String, x: f32, y: f32, max_width: Option<f32>) {
+    self.draw_text(text, x, y, max_width);
+    self.fill();
+  }
+
+  pub fn stroke_text(&mut self, text: String, x: f32, y: f32, max_width: Option<f32>) {
+    self.draw_text(text, x, y, max_width);
+    self.stroke();
+  }
+
+  fn draw_text(&mut self, text: String, x: f32, y: f32, max_width: Option<f32>) {
     let font = &self.state.font;
     let family = &font.font_family;
     let font_keys = &self.font_caches;
@@ -137,17 +147,16 @@ impl <'a> Context2d<'a> {
       None => 1.0,
     };
     text.chars().for_each(|c| {
-      let (text_width, text_height, advance_offset, glyph_key) = {
+      let (text_width, advance_offset, glyph_key) = {
         let font_context = self.font_context.borrow();
         let pos = font_context.get_char_index(&font_key, c).unwrap();
         let glyph_key = GlyphKey::new(pos, SubpixelOffset(0));
         let glyph_dimensions = font_context.glyph_dimensions(&instance, &glyph_key).unwrap();
         let text_width = glyph_dimensions.size.width;
-        let text_height = glyph_dimensions.size.height;
         let advance = glyph_dimensions.advance;
         let advance_offset = (advance - text_width as f32) / 2.0 * scale;
         offset_x = offset_x + advance_offset;
-        (text_width as f32 * scale, text_height as f32, advance_offset, glyph_key)
+        (text_width as f32 * scale, advance_offset, glyph_key)
       };
       {
         let mut mut_font_context = self.font_context.borrow_mut();
@@ -176,7 +185,6 @@ impl <'a> Context2d<'a> {
       };
       offset_x = offset_x + advance_offset + text_width;
     });
-    self.fill();
   }
 
   pub fn fill_rect(&self, rect: &Rect<f32>) {
@@ -314,8 +322,8 @@ impl <'a> Context2d<'a> {
                                                                               source_rect.size.height as i32),
                                                                   self.drawtarget.get_format());
     let matrix = Transform2D::identity()
-        .pre_translate(-source_rect.origin.to_vector().cast().unwrap())
-        .pre_mul(&self.state.transform);
+      .pre_translate(-source_rect.origin.to_vector().cast().unwrap())
+      .pre_mul(&self.state.transform);
     draw_target.set_transform(&matrix);
     draw_target
   }
@@ -335,6 +343,10 @@ impl <'a> Context2d<'a> {
     if let Some(pattern) = style.to_azure_pattern(&self.drawtarget) {
       self.state.fill_style = pattern
     }
+  }
+
+  pub fn set_font_style(&mut self, font_style: &str) {
+    self.state.font = Font::new(font_style);
   }
 
   pub fn set_stroke_style(&mut self, style: FillOrStrokeStyle) {
@@ -536,7 +548,7 @@ impl <'a> Context2d<'a> {
                     image_data_size: Size2D<f64>,
                     mut dirty_rect: Rect<f64>) {
       if image_data_size.width <= 0.0 || image_data_size.height <= 0.0 {
-          return
+        return
       }
 
       assert_eq!(image_data_size.width * image_data_size.height * 4.0, imagedata.len() as f64);
@@ -545,39 +557,39 @@ impl <'a> Context2d<'a> {
 
       // Step 2.
       if dirty_rect.size.width < 0.0f64 {
-          dirty_rect.origin.x += dirty_rect.size.width;
-          dirty_rect.size.width = -dirty_rect.size.width;
+        dirty_rect.origin.x += dirty_rect.size.width;
+        dirty_rect.size.width = -dirty_rect.size.width;
       }
 
       if dirty_rect.size.height < 0.0f64 {
-          dirty_rect.origin.y += dirty_rect.size.height;
-          dirty_rect.size.height = -dirty_rect.size.height;
+        dirty_rect.origin.y += dirty_rect.size.height;
+        dirty_rect.size.height = -dirty_rect.size.height;
       }
 
       // Step 3.
       if dirty_rect.origin.x < 0.0f64 {
-          dirty_rect.size.width += dirty_rect.origin.x;
-          dirty_rect.origin.x = 0.0f64;
+        dirty_rect.size.width += dirty_rect.origin.x;
+        dirty_rect.origin.x = 0.0f64;
       }
 
       if dirty_rect.origin.y < 0.0f64 {
-          dirty_rect.size.height += dirty_rect.origin.y;
-          dirty_rect.origin.y = 0.0f64;
+        dirty_rect.size.height += dirty_rect.origin.y;
+        dirty_rect.origin.y = 0.0f64;
       }
 
       // Step 4.
       if dirty_rect.max_x() > image_data_size.width {
-          dirty_rect.size.width = image_data_size.width - dirty_rect.origin.x;
+        dirty_rect.size.width = image_data_size.width - dirty_rect.origin.x;
       }
 
       if dirty_rect.max_y() > image_data_size.height {
-          dirty_rect.size.height = image_data_size.height - dirty_rect.origin.y;
+        dirty_rect.size.height = image_data_size.height - dirty_rect.origin.y;
       }
 
       // 5) If either dirtyWidth or dirtyHeight is negative or zero,
       // stop without affecting any bitmaps
       if dirty_rect.size.width <= 0.0 || dirty_rect.size.height <= 0.0 {
-          return
+        return
       }
 
       // Step 6.
@@ -590,21 +602,21 @@ impl <'a> Context2d<'a> {
       let mut src_line = (first_pixel.y * (image_size.width * 4) + first_pixel.x * 4) as usize;
 
       let mut dest =
-          Vec::with_capacity((dest_rect.size.width * dest_rect.size.height * 4) as usize);
+        Vec::with_capacity((dest_rect.size.width * dest_rect.size.height * 4) as usize);
 
       for _ in 0 .. dest_rect.size.height {
-          let mut src_offset = src_line;
-          for _ in 0 .. dest_rect.size.width {
-              let alpha = imagedata[src_offset + 3] as u16;
-              // add 127 before dividing for more accurate rounding
-              let premultiply_channel = |channel: u8| (((channel as u16 * alpha) + 127) / 255) as u8;
-              dest.push(premultiply_channel(imagedata[src_offset + 2]));
-              dest.push(premultiply_channel(imagedata[src_offset + 1]));
-              dest.push(premultiply_channel(imagedata[src_offset + 0]));
-              dest.push(imagedata[src_offset + 3]);
-              src_offset += 4;
-          }
-          src_line += (image_size.width * 4) as usize;
+        let mut src_offset = src_line;
+        for _ in 0 .. dest_rect.size.width {
+          let alpha = imagedata[src_offset + 3] as u16;
+          // add 127 before dividing for more accurate rounding
+          let premultiply_channel = |channel: u8| (((channel as u16 * alpha) + 127) / 255) as u8;
+          dest.push(premultiply_channel(imagedata[src_offset + 2]));
+          dest.push(premultiply_channel(imagedata[src_offset + 1]));
+          dest.push(premultiply_channel(imagedata[src_offset + 0]));
+          dest.push(imagedata[src_offset + 3]);
+          src_offset += 4;
+        }
+        src_line += (image_size.width * 4) as usize;
       }
 
       if let Some(source_surface) = self.drawtarget.create_source_surface_from_data(
@@ -612,9 +624,9 @@ impl <'a> Context2d<'a> {
               dest_rect.size,
               dest_rect.size.width * 4,
               SurfaceFormat::B8G8R8A8) {
-          self.drawtarget.copy_surface(source_surface,
-                                        Rect::new(Point2D::new(0, 0), dest_rect.size),
-                                        dest_rect.origin);
+        self.drawtarget.copy_surface(source_surface,
+                                      Rect::new(Point2D::new(0, 0), dest_rect.size),
+                                      dest_rect.origin);
       }
   }
 
@@ -659,8 +671,8 @@ impl SizeToi32 for Size2D<f64> {
 }
 
 pub trait RectToi32 {
-    fn to_i32(&self) -> Rect<i32>;
-    fn ceil(&self) -> Rect<f64>;
+  fn to_i32(&self) -> Rect<i32>;
+  fn ceil(&self) -> Rect<f64>;
 }
 
 impl RectToi32 for Rect<f64> {
@@ -689,26 +701,26 @@ fn crop_image(image_data: Vec<u8>,
               image_size: Size2D<f64>,
               crop_rect: Rect<f64>) -> Vec<u8>{
     // We're going to iterate over a pixel values array so we need integers
-    let crop_rect = crop_rect.to_i32();
-    let image_size = image_size.to_i32();
-    // Assuming 4 bytes per pixel and row-major order for storage
-    // (consecutive elements in a pixel row of the image are contiguous in memory)
-    let stride = image_size.width * 4;
-    let image_bytes_length = image_size.height * image_size.width * 4;
-    let crop_area_bytes_length = crop_rect.size.height * crop_rect.size.width * 4;
-    // If the image size is less or equal than the crop area we do nothing
-    if image_bytes_length <= crop_area_bytes_length {
-        return image_data;
-    }
+  let crop_rect = crop_rect.to_i32();
+  let image_size = image_size.to_i32();
+  // Assuming 4 bytes per pixel and row-major order for storage
+  // (consecutive elements in a pixel row of the image are contiguous in memory)
+  let stride = image_size.width * 4;
+  let image_bytes_length = image_size.height * image_size.width * 4;
+  let crop_area_bytes_length = crop_rect.size.height * crop_rect.size.width * 4;
+  // If the image size is less or equal than the crop area we do nothing
+  if image_bytes_length <= crop_area_bytes_length {
+    return image_data;
+  }
 
-    let mut new_image_data = Vec::new();
-    let mut src = (crop_rect.origin.y * stride + crop_rect.origin.x * 4) as usize;
-    for _ in 0..crop_rect.size.height {
-        let row = &image_data[src .. src + (4 * crop_rect.size.width) as usize];
-        new_image_data.extend_from_slice(row);
-        src += stride as usize;
-    }
-    new_image_data
+  let mut new_image_data = Vec::new();
+  let mut src = (crop_rect.origin.y * stride + crop_rect.origin.x * 4) as usize;
+  for _ in 0..crop_rect.size.height {
+    let row = &image_data[src .. src + (4 * crop_rect.size.width) as usize];
+    new_image_data.extend_from_slice(row);
+    src += stride as usize;
+  }
+  new_image_data
 }
 
 /// It writes an image to the destination target
@@ -841,15 +853,15 @@ impl ToAzurePattern for FillOrStrokeStyle {
 }
 
 impl ToAzureStyle for LineCapStyle {
-    type Target = CapStyle;
+  type Target = CapStyle;
 
-    fn to_azure_style(self) -> CapStyle {
-        match self {
-            LineCapStyle::Butt => CapStyle::Butt,
-            LineCapStyle::Round => CapStyle::Round,
-            LineCapStyle::Square => CapStyle::Square,
-        }
+  fn to_azure_style(self) -> CapStyle {
+    match self {
+      LineCapStyle::Butt => CapStyle::Butt,
+      LineCapStyle::Round => CapStyle::Round,
+      LineCapStyle::Square => CapStyle::Square,
     }
+  }
 }
 
 impl ToAzureStyle for LineJoinStyle {

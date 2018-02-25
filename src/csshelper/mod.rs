@@ -3,11 +3,22 @@ use std::ops::{Deref};
 
 use super::canvas::{Font, FontStyle, FontVariant};
 
+#[cfg(target_os = "linux")]
+static SANS_SERIF_FONT_FAMILY: &'static str = "DejaVu Sans";
+#[cfg(target_os = "macos")]
+static SANS_SERIF_FONT_FAMILY: &'static str = "Helvetica";
+#[cfg(target_os = "windows")]
+static SANS_SERIF_FONT_FAMILY: &'static str = "Arial";
+static SERIF_FONT_FAMILY: &'static str = "Times New Roman";
+static CURSIVE_FONT_FAMILY: &'static str = "Apple Chancery";
+static FANTASY_FONT_FAMILY: &'static str = "Papyrus";
+static MONOSPACE_FONT_FAMILY: &'static str = "Menlo";
+
 pub fn parse_fonts_style(input: &str) -> Font {
   let parser_input = &mut ParserInput::new(input);
   let mut css_parser = Parser::new(parser_input);
-  let mut font_size = 10 as f32;
-  let mut font_family = "sans-serif".to_string();
+  let mut font_size = 10.0;
+  let mut font_family = "san-serif".to_string();
   let mut index = 0;
   let mut font_variant = FontVariant::Normal;
   let mut font = None;
@@ -16,7 +27,7 @@ pub fn parse_fonts_style(input: &str) -> Font {
     match css_parser.next() {
       Ok(t) => {
         match t {
-          & Token::Dimension { ref value, ref unit, .. } => {
+          &Token::Dimension { ref value, ref unit, .. } => {
             let s = unit.deref().to_lowercase();
             // handle others absolute unit here
             if s == "px" {
@@ -25,10 +36,10 @@ pub fn parse_fonts_style(input: &str) -> Font {
               font_size = value * (16 as f32);
             };
           },
-          & Token::QuotedString(ref d) => {
+          &Token::QuotedString(ref d) => {
             font_family = String::from(d.deref());
           },
-          & Token::Ident(ref d) => {
+          &Token::Ident(ref d) => {
             let val = d.deref().to_lowercase();
             if index == 0 || index == 1 {
               if val == "small-caps" {
@@ -64,10 +75,19 @@ pub fn parse_fonts_style(input: &str) -> Font {
     None => { },
   };
 
+  let font_family = match font_family.as_str() {
+    "serif" => SERIF_FONT_FAMILY,
+    "sans-serif" => SANS_SERIF_FONT_FAMILY,
+    "cursive" => CURSIVE_FONT_FAMILY,
+    "fantasy" => FANTASY_FONT_FAMILY,
+    "monospace" => MONOSPACE_FONT_FAMILY,
+    other => other,
+  };
+
   Font {
     font_size,
     font_style,
-    font_family,
+    font_family: font_family.to_string(),
     font_variant,
   }
 }
