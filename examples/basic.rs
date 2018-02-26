@@ -1,5 +1,3 @@
-#![feature(libc)] extern crate libc;
-
 extern crate cssparser;
 extern crate euclid;
 extern crate image;
@@ -13,13 +11,6 @@ use euclid::{Point2D, Size2D, Rect};
 use image::png::{PNGEncoder};
 use image::{ColorType};
 use rustcanvas::{create_canvas, CanvasContextType, FillOrStrokeStyle};
-
-extern {
-  fn je_stats_print (write_cb: extern fn (*const libc::c_void, *const libc::c_char), cbopaque: *const libc::c_void, opts: *const libc::c_char);
-}
-extern fn write_cb (_: *const libc::c_void, message: *const libc::c_char) {
-  print! ("{}", String::from_utf8_lossy (unsafe {std::ffi::CStr::from_ptr (message as *const i8) .to_bytes()}));
-}
 
 fn main() {
   let canvas = create_canvas(1920, 1080, CanvasContextType::CTX2D);
@@ -55,8 +46,4 @@ fn main() {
   let png = PNGEncoder::new(f);
   assert_eq!(pixels.len(), 1920 * 1080 * 4);
   png.encode(&pixels, 1920, 1080, ColorType::RGBA(8)).unwrap();
-
-  unsafe {
-    je_stats_print (write_cb, std::ptr::null(), std::ptr::null())
-  };
 }
