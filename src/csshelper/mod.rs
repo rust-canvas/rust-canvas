@@ -4,15 +4,15 @@ use std::ops::{Deref};
 use super::canvas::{Font, FontStyle, FontVariant};
 
 #[cfg(target_os = "linux")]
-static SANS_SERIF_FONT_FAMILY: &'static str = "DejaVu Sans";
+pub static SANS_SERIF_FONT_FAMILY: &'static str = "DejaVu Sans";
 #[cfg(target_os = "macos")]
-static SANS_SERIF_FONT_FAMILY: &'static str = "Helvetica";
+pub static SANS_SERIF_FONT_FAMILY: &'static str = "Helvetica";
 #[cfg(target_os = "windows")]
-static SANS_SERIF_FONT_FAMILY: &'static str = "Arial";
-static SERIF_FONT_FAMILY: &'static str = "Times New Roman";
-static CURSIVE_FONT_FAMILY: &'static str = "Apple Chancery";
-static FANTASY_FONT_FAMILY: &'static str = "Papyrus";
-static MONOSPACE_FONT_FAMILY: &'static str = "Menlo";
+pub static SANS_SERIF_FONT_FAMILY: &'static str = "Arial";
+pub static SERIF_FONT_FAMILY: &'static str = "Times New Roman";
+pub static CURSIVE_FONT_FAMILY: &'static str = "Apple Chancery";
+pub static FANTASY_FONT_FAMILY: &'static str = "Papyrus";
+pub static MONOSPACE_FONT_FAMILY: &'static str = "Menlo";
 
 pub fn parse_fonts_style(input: &str) -> Font {
   let parser_input = &mut ParserInput::new(input);

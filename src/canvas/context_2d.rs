@@ -19,6 +19,7 @@ use num_traits::ToPrimitive;
 use pathfinder_font_renderer::{FontContext, FontKey, FontInstance, GlyphKey, SubpixelOffset};
 
 use fontrenderer::{flip_text};
+use csshelper::{SANS_SERIF_FONT_FAMILY};
 use super::canvas_trait::*;
 use super::paintstate::{Font, PaintState};
 
@@ -125,7 +126,7 @@ impl <'a> Context2d<'a> {
     let size = &font.font_size;
     let font_key = match font_keys.get(family) {
       Some(f) => f,
-      None => font_keys.get("PingFang TC").unwrap(),
+      None => font_keys.get(SANS_SERIF_FONT_FAMILY).expect("Get fallback font fail"),
     };
     let instance = FontInstance::new(&font_key, Au(* size as i32 * 1600));
     let mut offset_x = x;
@@ -133,9 +134,9 @@ impl <'a> Context2d<'a> {
       Some(m) => {
         let total_width = text.chars().map(|c| {
           let font_context = self.font_context.borrow();
-          let pos = font_context.get_char_index(&font_key, c).unwrap();
+          let pos = font_context.get_char_index(&font_key, c).expect("Get Char index font_context fail");
           let glyph_key = GlyphKey::new(pos, SubpixelOffset(0));
-          let glyph_dimensions = font_context.glyph_dimensions(&instance, &glyph_key).unwrap();
+          let glyph_dimensions = font_context.glyph_dimensions(&instance, &glyph_key).expect("Get glyph dimensions fail");
           glyph_dimensions.advance
         }).sum::<f32>();
         if total_width > m {
@@ -149,9 +150,9 @@ impl <'a> Context2d<'a> {
     text.chars().for_each(|c| {
       let (text_width, advance_offset, glyph_key) = {
         let font_context = self.font_context.borrow();
-        let pos = font_context.get_char_index(&font_key, c).unwrap();
+        let pos = font_context.get_char_index(&font_key, c).expect("Get Char index font_context fail");
         let glyph_key = GlyphKey::new(pos, SubpixelOffset(0));
-        let glyph_dimensions = font_context.glyph_dimensions(&instance, &glyph_key).unwrap();
+        let glyph_dimensions = font_context.glyph_dimensions(&instance, &glyph_key).expect("Get glyph dimensions fail");
         let text_width = glyph_dimensions.size.width;
         let advance = glyph_dimensions.advance;
         let advance_offset = (advance - text_width as f32) / 2.0 * scale;
@@ -160,7 +161,7 @@ impl <'a> Context2d<'a> {
       };
       {
         let mut mut_font_context = self.font_context.borrow_mut();
-        let glyph_outline = mut_font_context.glyph_outline(&instance, &glyph_key).unwrap();
+        let glyph_outline = mut_font_context.glyph_outline(&instance, &glyph_key).expect("Glyph outline fail");
         glyph_outline.iter()
           .map(|e| flip_text(scale)(e))
           .for_each(|f| match f {
