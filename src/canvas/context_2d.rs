@@ -128,7 +128,7 @@ impl <'a> Context2d<'a> {
       Some(f) => f,
       None => font_keys.get(SANS_SERIF_FONT_FAMILY).expect("Get fallback font fail"),
     };
-    let instance = FontInstance::new(&font_key, Au(* size as i32 * 1600));
+    let instance = FontInstance::new(&font_key, Au::from_px(* size as i32));
     let mut offset_x = x;
     let scale = match max_width {
       Some(m) => {
