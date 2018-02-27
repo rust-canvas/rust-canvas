@@ -30,12 +30,14 @@ fn main() {
   ctx.arc(&Point2D::new(700.0, 600.0), 400.0, 0.0, 2.0 * PI as f32, false);
   ctx.fill();
   ctx.set_fill_style(FillOrStrokeStyle::Color(RGBA::new(0, 0, 0, 255)));
-  ctx.set_font_style("\"Pingfang TC\"");
+  ctx.set_font_style("200px \"PingFang TC\"");
   ctx.fill_text("哈哈".to_string(), 1000.0, 800.0, Some(200.0));
   ctx.set_fill_style(FillOrStrokeStyle::Color(RGBA::new(244, 143, 177, 255)));
   ctx.fill_text("二豆".to_string(), 300.0, 800.0, None);
   ctx.set_stroke_style(FillOrStrokeStyle::Color(RGBA::new(66, 165, 245, 255)));
   ctx.stroke_text("来呀打我啊".to_string(), 300.0, 400.0, None);
+  ctx.set_font_style("200px \"Monaco\"");
+  ctx.fill_text("Hello Moto".to_string(), 500.0, 700.0, None);
   ctx.close_path();
   let canvas_size = Size2D::new(1920.0, 1080.0);
   let size_i32 = canvas_size.to_i32();
