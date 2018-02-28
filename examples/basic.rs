@@ -1,51 +1,73 @@
 extern crate cssparser;
 extern crate euclid;
 extern crate image;
+extern crate ipc_channel;
 extern crate rustcanvas;
 
 use std::fs::File;
 use std::f64::consts::PI;
+use std::thread;
 
 use cssparser::{RGBA};
 use euclid::{Point2D, Size2D, Rect};
 use image::png::{PNGEncoder};
 use image::{ColorType};
-use rustcanvas::{create_canvas, CanvasContextType, FillOrStrokeStyle};
+use ipc_channel::ipc;
+use rustcanvas::{create_canvas, CanvasContextType, FillOrStrokeStyle, CanvasMsg, Canvas2dMsg};
 
 fn main() {
   let canvas = create_canvas(1920, 1080, CanvasContextType::CTX2D);
-  let mut ctx = canvas.ctx;
-  ctx.set_line_width(10.0);
-  ctx.set_stroke_style(FillOrStrokeStyle::Color(RGBA::new(66, 165, 245, 255)));
-  ctx.move_to(&Point2D::new(100.0, 100.0));
-  ctx.line_to(&Point2D::new(600.0, 600.0));
-  ctx.move_to(&Point2D::new(700.0, 200.0));
-  ctx.save_context_state();
-  ctx.stroke();
-  ctx.set_stroke_style(FillOrStrokeStyle::Color(RGBA::new(244, 143, 177, 255)));
-  ctx.save_context_state();
-  ctx.bezier_curve_to(&Point2D::new(760.0, 300.0), &Point2D::new(920.0, 425.0), &Point2D::new(1100.0, 200.0));
-  ctx.stroke();
-  ctx.set_fill_style(FillOrStrokeStyle::Color(RGBA::new(233, 193, 127, 255)));
-  ctx.arc(&Point2D::new(700.0, 600.0), 400.0, 0.0, 2.0 * PI as f32, false);
-  ctx.fill();
-  ctx.set_fill_style(FillOrStrokeStyle::Color(RGBA::new(0, 0, 0, 255)));
-  ctx.set_font_style("200px \"PingFang TC\"");
-  ctx.fill_text("哈哈".to_string(), 1000.0, 800.0, Some(200.0));
-  ctx.set_fill_style(FillOrStrokeStyle::Color(RGBA::new(244, 143, 177, 255)));
-  ctx.fill_text("二豆".to_string(), 300.0, 800.0, None);
-  ctx.set_stroke_style(FillOrStrokeStyle::Color(RGBA::new(66, 165, 245, 255)));
-  ctx.stroke_text("来呀打我啊".to_string(), 300.0, 400.0, None);
-  ctx.set_font_style("200px \"Monaco\"");
-  ctx.fill_text("Hello Moto".to_string(), 500.0, 700.0, None);
-  ctx.close_path();
+  let renderer = canvas.ctx;
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetLineWidth(10.0))).unwrap();
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetStrokeStyle(FillOrStrokeStyle::Color(RGBA::new(66, 165, 245, 255))))).unwrap();
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::MoveTo(Point2D::new(100.0, 100.0)))).unwrap();
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::LineTo(Point2D::new(600.0, 600.0)))).unwrap();
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::MoveTo(Point2D::new(700.0, 200.0)))).unwrap();
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::Stroke)).unwrap();
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetStrokeStyle(FillOrStrokeStyle::Color(RGBA::new(244, 143, 177, 255))))).unwrap();
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::BezierCurveTo(Point2D::new(760.0, 300.0), Point2D::new(920.0, 425.0), Point2D::new(1100.0, 200.0)))).unwrap();
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::Stroke)).unwrap();
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetFillStyle(FillOrStrokeStyle::Color(RGBA::new(233, 193, 127, 255))))).unwrap();
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::Arc(Point2D::new(700.0, 600.0), 400.0, 0.0, 2.0 * PI as f32, false))).unwrap();
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::Fill)).unwrap();
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetFillStyle(FillOrStrokeStyle::Color(RGBA::new(0, 0, 0, 255))))).unwrap();
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetFontStyle("200px \"PingFang TC\"".to_string()))).unwrap();
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::FillText("哈哈".to_string(), 1000.0, 800.0, Some(200.0)))).unwrap();
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetFillStyle(FillOrStrokeStyle::Color(RGBA::new(244, 143, 177, 255))))).unwrap();
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::FillText("二豆".to_string(), 300.0, 800.0, None))).unwrap();
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetStrokeStyle(FillOrStrokeStyle::Color(RGBA::new(66, 165, 245, 255))))).unwrap();
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::StrokeText("来呀打我啊".to_string(), 300.0, 400.0, None))).unwrap();
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetFontStyle("200px \"Monaco\"".to_string()))).unwrap();
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::FillText("Hello Moto".to_string(), 500.0, 700.0, None))).unwrap();
   let canvas_size = Size2D::new(1920.0, 1080.0);
   let size_i32 = canvas_size.to_i32();
-  let pixels = ctx.image_data(Rect::new(Point2D::new(0i32, 0i32), size_i32), canvas_size);
+  let (sender, receiver) = ipc::channel::<Vec<u8>>().unwrap();
 
-  let f = File::create("./test.png").unwrap();
+  renderer.send(
+    CanvasMsg::Canvas2d(Canvas2dMsg::GetImageData(Rect::new(Point2D::new(0i32, 0i32), size_i32), canvas_size, sender))
+  ).unwrap();
 
-  let png = PNGEncoder::new(f);
-  assert_eq!(pixels.len(), 1920 * 1080 * 4);
-  png.encode(&pixels, 1920, 1080, ColorType::RGBA(8)).unwrap();
+  let handler = thread::Builder::new().name("WriteFileThread".to_owned()).spawn(move || {
+    loop {
+      match receiver.recv() {
+        Ok(pixels) => {
+          let file_name = "./test.png";
+          let f = File::create(file_name).unwrap();
+          let png = PNGEncoder::new(f);
+          assert_eq!(pixels.len(), 1920 * 1080 * 4);
+          png.encode(&pixels, 1920, 1080, ColorType::RGBA(8)).expect("Write File Error");
+        },
+        Err(e) => println!("Recv fail: {:?}", e),
+      }
+    }
+  });
+
+  match handler {
+    Ok(h) => match h.join() {
+      Ok(m) => println!("{:?}", m),
+      Err(e) => println!("Join fail: {:?}", e),
+    },
+    Err(e) => println!("spawn fail: {:?}", e),
+  };
+
 }

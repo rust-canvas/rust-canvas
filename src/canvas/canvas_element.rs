@@ -1,9 +1,13 @@
+use euclid::{Size2D};
+use ipc_channel::ipc::{IpcSender};
+
+use super::canvas_trait::{CanvasMsg};
 use super::context_2d::{Context2d};
 
 pub struct CanvasElement {
   pub width: i32,
   pub height: i32,
-  pub ctx: Context2d<'static>,
+  pub ctx: IpcSender<CanvasMsg>,
 }
 
 #[derive(Debug)]
@@ -18,7 +22,7 @@ impl <'a> CanvasElement {
   pub fn new(width: i32, height: i32, context_type: CanvasContextType) -> Option<CanvasElement> {
     match context_type {
       CanvasContextType::CTX2D => {
-        let ctx = Context2d::new(width, height);
+        let ctx = Context2d::start(Size2D::new(width, height));
         Some(CanvasElement { width, height, ctx })
       },
       _ => None,

@@ -9,6 +9,7 @@ azure = "0.26"
 cssparser = { version = "0.23", features = ["serde"] }
 euclid = "0.16"
 font-loader = "0.6"
+ipc-channel = "0.10.0"
 lyon_path = "0.9"
 num-traits = "0.1.32"
 pathfinder_font_renderer = { git = "https://github.com/rust-canvas/pathfinder", branch = "rust-canvas", features = ["usefreetype"] }

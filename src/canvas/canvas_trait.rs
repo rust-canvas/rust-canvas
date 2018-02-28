@@ -1,7 +1,63 @@
 use std::str::FromStr;
 
 use cssparser::RGBA;
-use euclid::{Size2D};
+use euclid::{Point2D, Rect, Size2D, Transform2D, Vector2D};
+use ipc_channel::ipc::{IpcSender};
+
+#[derive(Clone, Deserialize, Serialize)]
+pub enum CanvasMsg {
+  Canvas2d(Canvas2dMsg),
+  FromScript(FromScriptMsg),
+  Close,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+pub enum FromScriptMsg {
+  SendPixels(IpcSender<Option<Vec<u8>>>),
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+pub enum Canvas2dMsg {
+  Arc(Point2D<f32>, f32, f32, f32, bool),
+  ArcTo(Point2D<f32>, Point2D<f32>, f32),
+  DrawImage(Vec<u8>, Size2D<f64>, Rect<f64>, Rect<f64>, bool),
+  DrawImageSelf(Size2D<f64>, Rect<f64>, Rect<f64>, bool),
+  BeginPath,
+  BezierCurveTo(Point2D<f32>, Point2D<f32>, Point2D<f32>),
+  ClearRect(Rect<f32>),
+  Clip,
+  ClosePath,
+  Ellipse(Point2D<f32>, f32, f32, f32, f32, f32, bool),
+  Fill,
+  FillText(String, f32, f32, Option<f32>),
+  FillRect(Rect<f32>),
+  GetImageData(Rect<i32>, Size2D<f64>, IpcSender<Vec<u8>>),
+  IsPointInPath(f64, f64, FillRule, IpcSender<bool>),
+  LineTo(Point2D<f32>),
+  MoveTo(Point2D<f32>),
+  PutImageData(Vec<u8>, Vector2D<f64>, Size2D<f64>, Rect<f64>),
+  QuadraticCurveTo(Point2D<f32>, Point2D<f32>),
+  Rect(Rect<f32>),
+  RestoreContext,
+  SaveContext,
+  StrokeRect(Rect<f32>),
+  Stroke,
+  StrokeText(String, f32, f32, Option<f32>),
+  SetFillStyle(FillOrStrokeStyle),
+  SetFontStyle(String),
+  SetStrokeStyle(FillOrStrokeStyle),
+  SetLineWidth(f32),
+  SetLineCap(LineCapStyle),
+  SetLineJoin(LineJoinStyle),
+  SetMiterLimit(f32),
+  SetGlobalAlpha(f32),
+  SetGlobalComposition(CompositionOrBlending),
+  SetTransform(Transform2D<f32>),
+  SetShadowOffsetX(f64),
+  SetShadowOffsetY(f64),
+  SetShadowBlur(f64),
+  SetShadowColor(RGBA),
+}
 
 #[derive(Clone, Deserialize, Serialize)]
 pub enum FillRule {
