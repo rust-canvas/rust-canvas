@@ -150,6 +150,7 @@ impl <'a> Context2d<'a> {
               Canvas2dMsg::SetShadowOffsetY(value) => painter.set_shadow_offset_y(value),
               Canvas2dMsg::SetShadowBlur(value) => painter.set_shadow_blur(value),
               Canvas2dMsg::SetShadowColor(ref color) => painter.set_shadow_color(color.to_azure_style()),
+              Canvas2dMsg::NotImplement => { },
             }
           },
           CanvasMsg::Close => break,

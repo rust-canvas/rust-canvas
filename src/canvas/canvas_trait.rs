@@ -57,6 +57,8 @@ pub enum Canvas2dMsg {
   SetShadowOffsetY(f64),
   SetShadowBlur(f64),
   SetShadowColor(RGBA),
+  // for not implement methods
+  NotImplement,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
