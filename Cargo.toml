@@ -9,15 +9,11 @@ azure = "0.28"
 cssparser = { version = "0.23", features = ["serde"] }
 euclid = { version = "0.17", features = ["serde"] }
 font-loader = "0.6"
-lyon_path = "0.9"
+lyon_path = "0.10"
 num-traits = "0.1.32"
 pathfinder_font_renderer = { git = "https://github.com/rust-canvas/pathfinder", branch = "rust-canvas", features = ["usefreetype"] }
 serde = "1.0"
 serde_derive = "1.0"
-
-[replace]
-"lyon_path:0.9.0" = { git = "https://github.com/nical/lyon" }
-"lyon_geom:0.9.0" = { git = "https://github.com/nical/lyon" }
 
 [dev-dependencies]
 image = "^0.18"
