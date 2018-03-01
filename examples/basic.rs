@@ -46,6 +46,8 @@ fn main() {
     CanvasMsg::Canvas2d(Canvas2dMsg::GetImageData(Rect::new(Point2D::new(0i32, 0i32), size_i32), canvas_size, sender))
   ).unwrap();
 
+  renderer.send(CanvasMsg::Close).unwrap();
+
   let handler = thread::Builder::new().name("WriteFileThread".to_owned()).spawn(move || {
     loop {
       match receiver.recv() {
