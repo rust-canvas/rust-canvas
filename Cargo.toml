@@ -5,9 +5,9 @@ authors = ["LongYinan <lynweklm@gmail.com>"]
 
 [dependencies]
 app_units = "0.5"
-azure = "0.26"
+azure = "0.28"
 cssparser = { version = "0.23", features = ["serde"] }
-euclid = "0.16"
+euclid = { version = "0.17", features = ["serde"] }
 font-loader = "0.6"
 ipc-channel = "0.10.0"
 lyon_path = "0.9"
@@ -15,6 +15,10 @@ num-traits = "0.1.32"
 pathfinder_font_renderer = { git = "https://github.com/rust-canvas/pathfinder", branch = "rust-canvas", features = ["usefreetype"] }
 serde = "1.0"
 serde_derive = "1.0"
+
+[replace]
+"lyon_path:0.9.0" = { git = "https://github.com/nical/lyon" }
+"lyon_geom:0.9.0" = { git = "https://github.com/nical/lyon" }
 
 [dev-dependencies]
 image = "^0.18"
