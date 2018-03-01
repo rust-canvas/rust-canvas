@@ -6,7 +6,6 @@ extern crate rustcanvas;
 use std::fs::File;
 use std::f64::consts::PI;
 use std::sync::mpsc::{channel};
-use std::thread;
 
 use cssparser::{RGBA};
 use euclid::{Point2D, Size2D, Rect};
@@ -17,6 +16,7 @@ use rustcanvas::{create_canvas, CanvasContextType, FillOrStrokeStyle, CanvasMsg,
 fn main() {
   let canvas = create_canvas(1920, 1080, CanvasContextType::CTX2D);
   let renderer = canvas.ctx;
+  let (sender, receiver) = channel::<Vec<u8>>();
   renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetLineWidth(10.0))).unwrap();
   renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetStrokeStyle(FillOrStrokeStyle::Color(RGBA::new(66, 165, 245, 255))))).unwrap();
   renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::MoveTo(Point2D::new(100.0, 100.0)))).unwrap();
@@ -40,7 +40,6 @@ fn main() {
   renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::FillText("Hello Moto".to_string(), 500.0, 700.0, None))).unwrap();
   let canvas_size = Size2D::new(1920.0, 1080.0);
   let size_i32 = canvas_size.to_i32();
-  let (sender, receiver) = channel::<Vec<u8>>();
 
   renderer.send(
     CanvasMsg::Canvas2d(Canvas2dMsg::GetImageData(Rect::new(Point2D::new(0i32, 0i32), size_i32), canvas_size, sender))
@@ -48,28 +47,14 @@ fn main() {
 
   renderer.send(CanvasMsg::Close).unwrap();
 
-  let handler = thread::Builder::new().name("WriteFileThread".to_owned()).spawn(move || {
-    loop {
-      match receiver.recv() {
-        Ok(pixels) => {
-          let file_name = "./test.png";
-          let f = File::create(file_name).unwrap();
-          let png = PNGEncoder::new(f);
-          assert_eq!(pixels.len(), 1920 * 1080 * 4);
-          png.encode(&pixels, 1920, 1080, ColorType::RGBA(8)).expect("Write File Error");
-          break;
-        },
-        Err(e) => println!("Recv fail: {:?}", e),
-      }
-    }
-  });
-
-  match handler {
-    Ok(h) => match h.join() {
-      Err(e) => println!("Join fail: {:?}", e),
-      _ => {},
+  match receiver.recv() {
+    Ok(pixels) => {
+      let f = File::create("./test.png").unwrap();
+      let png = PNGEncoder::new(f);
+      assert_eq!(pixels.len(), 1920 * 1080 * 4);
+      png.encode(&pixels, 1920, 1080, ColorType::RGBA(8)).expect("Write File Error");
     },
-    Err(e) => println!("spawn fail: {:?}", e),
+    Err(e) => panic!("Recv fail: {:?}", e),
   };
 
 }

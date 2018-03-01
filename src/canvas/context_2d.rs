@@ -9,7 +9,7 @@ use std::thread;
 use app_units::Au;
 use azure::azure_hl::JoinStyle;
 use azure::azure_hl::GradientStop;
-use azure::azure_hl::{Pattern, DrawTarget, BackendType, SurfaceFormat, DrawSurfaceOptions};
+use azure::azure_hl::{Pattern, DrawTarget, SurfaceFormat, DrawSurfaceOptions};
 use azure::azure_hl::{AntialiasMode, CompositionOp, Color, DrawOptions, Filter, ColorPattern};
 use azure::azure_hl::{LinearGradientPattern, ExtendMode, RadialGradientPattern, SurfacePattern};
 use azure::azure_hl::{PathBuilder, CapStyle, StrokeOptions};
@@ -24,6 +24,7 @@ use fontrenderer::{flip_text};
 use csshelper::{SANS_SERIF_FONT_FAMILY};
 use super::canvas_trait::*;
 use super::paintstate::{Font, PaintState};
+use super::get_target::{get_draw_target};
 
 pub struct Context2d<'a> {
   pub state: PaintState<'a>,
@@ -63,7 +64,7 @@ impl <'a> Context2d<'a> {
   }
 
   pub fn new(size: Size2D<i32>) -> Context2d<'a> {
-    let drawtarget = DrawTarget::new(BackendType::Skia, size, SurfaceFormat::B8G8R8A8);
+    let drawtarget = get_draw_target(size);
     let path_builder = drawtarget.create_path_builder();
 
     let mut ctx = Context2d {
