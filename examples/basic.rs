@@ -1,18 +1,17 @@
 extern crate cssparser;
 extern crate euclid;
 extern crate image;
-extern crate ipc_channel;
 extern crate rustcanvas;
 
 use std::fs::File;
 use std::f64::consts::PI;
+use std::sync::mpsc::{channel};
 use std::thread;
 
 use cssparser::{RGBA};
 use euclid::{Point2D, Size2D, Rect};
 use image::png::{PNGEncoder};
 use image::{ColorType};
-use ipc_channel::ipc;
 use rustcanvas::{create_canvas, CanvasContextType, FillOrStrokeStyle, CanvasMsg, Canvas2dMsg};
 
 fn main() {
@@ -41,7 +40,7 @@ fn main() {
   renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::FillText("Hello Moto".to_string(), 500.0, 700.0, None))).unwrap();
   let canvas_size = Size2D::new(1920.0, 1080.0);
   let size_i32 = canvas_size.to_i32();
-  let (sender, receiver) = ipc::channel::<Vec<u8>>().unwrap();
+  let (sender, receiver) = channel::<Vec<u8>>();
 
   renderer.send(
     CanvasMsg::Canvas2d(Canvas2dMsg::GetImageData(Rect::new(Point2D::new(0i32, 0i32), size_i32), canvas_size, sender))
@@ -56,6 +55,7 @@ fn main() {
           let png = PNGEncoder::new(f);
           assert_eq!(pixels.len(), 1920 * 1080 * 4);
           png.encode(&pixels, 1920, 1080, ColorType::RGBA(8)).expect("Write File Error");
+          break;
         },
         Err(e) => println!("Recv fail: {:?}", e),
       }
@@ -64,8 +64,8 @@ fn main() {
 
   match handler {
     Ok(h) => match h.join() {
-      Ok(m) => println!("{:?}", m),
       Err(e) => println!("Join fail: {:?}", e),
+      _ => {},
     },
     Err(e) => println!("spawn fail: {:?}", e),
   };

@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 use std::mem;
 use std::sync::Arc;
+use std::sync::mpsc::{Sender, channel};
 use std::thread;
 
 use app_units::Au;
@@ -15,7 +16,6 @@ use azure::azure_hl::{PathBuilder, CapStyle, StrokeOptions};
 use azure::{AzFloat};
 use euclid::{Rect, Point2D, Vector2D, Transform2D, Size2D};
 use fonts::system_fonts;
-use ipc_channel::ipc::{self, IpcSender};
 use lyon_path::{PathEvent};
 use num_traits::ToPrimitive;
 use pathfinder_font_renderer::{FontContext, FontKey, FontInstance, GlyphKey, SubpixelOffset};
@@ -83,8 +83,8 @@ impl <'a> Context2d<'a> {
     ctx
   }
 
-  pub fn start(size: Size2D<i32>) -> IpcSender<CanvasMsg> {
-    let (sender, receiver) = ipc::channel::<CanvasMsg>().unwrap();
+  pub fn start(size: Size2D<i32>) -> Sender<CanvasMsg> {
+    let (sender, receiver) = channel::<CanvasMsg>();
     thread::Builder::new().name("CanvasThread".to_owned()).spawn(move || {
       let mut painter = Context2d::new(size);
       loop {
@@ -375,7 +375,7 @@ impl <'a> Context2d<'a> {
   }
 
   fn is_point_in_path(&mut self, x: f64, y: f64,
-                      _fill_rule: FillRule, chan: IpcSender<bool>) {
+                      _fill_rule: FillRule, chan: Sender<bool>) {
     let path = self.path_builder.finish();
     let result = path.contains_point(x, y, &self.state.transform);
     self.path_builder = path.copy_to_builder();
@@ -718,7 +718,7 @@ impl <'a> Context2d<'a> {
       }
   }
 
-  fn image_data(&self, dest_rect: Rect<i32>, canvas_size: Size2D<f64>, chan: IpcSender<Vec<u8>>) {
+  fn image_data(&self, dest_rect: Rect<i32>, canvas_size: Size2D<f64>, chan: Sender<Vec<u8>>) {
     let mut dest_data = self.read_pixels(dest_rect, canvas_size);
 
     // bgra -> rgba
@@ -726,7 +726,7 @@ impl <'a> Context2d<'a> {
     chan.send(dest_data).unwrap();
   }
 
-  fn send_pixels(&mut self, chan: IpcSender<Option<Vec<u8>>>) {
+  fn send_pixels(&mut self, chan: Sender<Option<Vec<u8>>>) {
     self.drawtarget.snapshot().get_data_surface().with_data(|element| {
       chan.send(Some(element.into())).unwrap();
     })

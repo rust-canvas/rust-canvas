@@ -3,7 +3,6 @@ extern crate azure;
 extern crate cssparser;
 extern crate euclid;
 extern crate font_loader as fonts;
-extern crate ipc_channel;
 extern crate lyon_path;
 extern crate num_traits;
 extern crate pathfinder_font_renderer;

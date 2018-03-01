@@ -1,5 +1,6 @@
+use std::sync::mpsc::{Sender};
+
 use euclid::{Size2D};
-use ipc_channel::ipc::{IpcSender};
 
 use super::canvas_trait::{CanvasMsg};
 use super::context_2d::{Context2d};
@@ -7,7 +8,7 @@ use super::context_2d::{Context2d};
 pub struct CanvasElement {
   pub width: i32,
   pub height: i32,
-  pub ctx: IpcSender<CanvasMsg>,
+  pub ctx: Sender<CanvasMsg>,
 }
 
 #[derive(Debug)]

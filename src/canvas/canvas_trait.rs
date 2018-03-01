@@ -1,22 +1,22 @@
 use std::str::FromStr;
+use std::sync::mpsc::{Sender};
 
 use cssparser::RGBA;
 use euclid::{Point2D, Rect, Size2D, Transform2D, Vector2D};
-use ipc_channel::ipc::{IpcSender};
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone)]
 pub enum CanvasMsg {
   Canvas2d(Canvas2dMsg),
   FromScript(FromScriptMsg),
   Close,
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone)]
 pub enum FromScriptMsg {
-  SendPixels(IpcSender<Option<Vec<u8>>>),
+  SendPixels(Sender<Option<Vec<u8>>>),
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone)]
 pub enum Canvas2dMsg {
   Arc(Point2D<f32>, f32, f32, f32, bool),
   ArcTo(Point2D<f32>, Point2D<f32>, f32),
@@ -31,8 +31,8 @@ pub enum Canvas2dMsg {
   Fill,
   FillText(String, f32, f32, Option<f32>),
   FillRect(Rect<f32>),
-  GetImageData(Rect<i32>, Size2D<f64>, IpcSender<Vec<u8>>),
-  IsPointInPath(f64, f64, FillRule, IpcSender<bool>),
+  GetImageData(Rect<i32>, Size2D<f64>, Sender<Vec<u8>>),
+  IsPointInPath(f64, f64, FillRule, Sender<bool>),
   LineTo(Point2D<f32>),
   MoveTo(Point2D<f32>),
   PutImageData(Vec<u8>, Vector2D<f64>, Size2D<f64>, Rect<f64>),
