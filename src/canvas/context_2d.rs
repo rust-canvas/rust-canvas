@@ -730,6 +730,14 @@ impl <'a> Context2d<'a> {
     chan.send(dest_data).unwrap();
   }
 
+  pub fn send_pixels_sync(&mut self) -> Vec<u8> {
+    let mut src_data = Vec::new();
+    self.drawtarget.snapshot().get_data_surface().with_data(|element| {
+      src_data = element.to_vec()
+    });
+    src_data
+  }
+
   pub fn send_pixels(&mut self, chan: Sender<Option<Vec<u8>>>) {
     self.drawtarget.snapshot().get_data_surface().with_data(|element| {
       chan.send(Some(element.into())).unwrap();
