@@ -12,12 +12,12 @@ use rustcanvas::{create_canvas, CanvasContextType, FillOrStrokeStyle, CanvasMsg,
 
 fn main() {
   let (sender, receiver) = channel::<Vec<u8>>();
-  for _ in 0..2 {
+  for _ in 0..4 {
     let canvas = create_canvas(1920, 1080, CanvasContextType::CTX2D);
     let renderer = canvas.ctx;
     let renderer1 = renderer.clone();
     let sender = sender.clone();
-    for _ in 0..5000 {
+    for _ in 0..2500 {
       let rrenderer = renderer.clone();
       let ssender = sender.clone();
       rrenderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetLineWidth(10.0))).unwrap();

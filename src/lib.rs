@@ -2,6 +2,7 @@ extern crate app_units;
 extern crate azure;
 extern crate cssparser;
 extern crate euclid;
+extern crate faster;
 extern crate font_loader as fonts;
 extern crate gleam;
 extern crate glutin;

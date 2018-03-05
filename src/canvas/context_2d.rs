@@ -15,6 +15,7 @@ use azure::azure_hl::{LinearGradientPattern, ExtendMode, RadialGradientPattern, 
 use azure::azure_hl::{PathBuilder, CapStyle, StrokeOptions};
 use azure::{AzFloat};
 use euclid::{Rect, Point2D, Vector2D, Transform2D, Size2D};
+use faster::*;
 use fonts::system_fonts;
 use lyon_path::{PathEvent};
 use num_traits::ToPrimitive;
@@ -640,94 +641,94 @@ impl <'a> Context2d<'a> {
                     offset: Vector2D<f64>,
                     image_data_size: Size2D<f64>,
                     mut dirty_rect: Rect<f64>) {
-      if image_data_size.width <= 0.0 || image_data_size.height <= 0.0 {
-        return
+    if image_data_size.width <= 0.0 || image_data_size.height <= 0.0 {
+      return
+    }
+
+    assert_eq!(image_data_size.width * image_data_size.height * 4.0, imagedata.len() as f64);
+
+    // Step 1. TODO (neutered data)
+
+    // Step 2.
+    if dirty_rect.size.width < 0.0f64 {
+      dirty_rect.origin.x += dirty_rect.size.width;
+      dirty_rect.size.width = -dirty_rect.size.width;
+    }
+
+    if dirty_rect.size.height < 0.0f64 {
+      dirty_rect.origin.y += dirty_rect.size.height;
+      dirty_rect.size.height = -dirty_rect.size.height;
+    }
+
+    // Step 3.
+    if dirty_rect.origin.x < 0.0f64 {
+      dirty_rect.size.width += dirty_rect.origin.x;
+      dirty_rect.origin.x = 0.0f64;
+    }
+
+    if dirty_rect.origin.y < 0.0f64 {
+      dirty_rect.size.height += dirty_rect.origin.y;
+      dirty_rect.origin.y = 0.0f64;
+    }
+
+    // Step 4.
+    if dirty_rect.max_x() > image_data_size.width {
+      dirty_rect.size.width = image_data_size.width - dirty_rect.origin.x;
+    }
+
+    if dirty_rect.max_y() > image_data_size.height {
+      dirty_rect.size.height = image_data_size.height - dirty_rect.origin.y;
+    }
+
+    // 5) If either dirtyWidth or dirtyHeight is negative or zero,
+    // stop without affecting any bitmaps
+    if dirty_rect.size.width <= 0.0 || dirty_rect.size.height <= 0.0 {
+      return
+    }
+
+    // Step 6.
+    let dest_rect = dirty_rect.translate(&offset).to_i32();
+
+    // azure_hl operates with integers. We need to cast the image size
+    let image_size = image_data_size.to_i32();
+
+    let first_pixel = dest_rect.origin - offset.to_i32();
+    let mut src_line = (first_pixel.y * (image_size.width * 4) + first_pixel.x * 4) as usize;
+
+    let mut dest =
+      Vec::with_capacity((dest_rect.size.width * dest_rect.size.height * 4) as usize);
+
+    for _ in 0 .. dest_rect.size.height {
+      let mut src_offset = src_line;
+      for _ in 0 .. dest_rect.size.width {
+        let alpha = imagedata[src_offset + 3] as u16;
+        // add 127 before dividing for more accurate rounding
+        let premultiply_channel = |channel: u8| (((channel as u16 * alpha) + 127) / 255) as u8;
+        dest.push(premultiply_channel(imagedata[src_offset + 2]));
+        dest.push(premultiply_channel(imagedata[src_offset + 1]));
+        dest.push(premultiply_channel(imagedata[src_offset + 0]));
+        dest.push(imagedata[src_offset + 3]);
+        src_offset += 4;
       }
+      src_line += (image_size.width * 4) as usize;
+    }
 
-      assert_eq!(image_data_size.width * image_data_size.height * 4.0, imagedata.len() as f64);
-
-      // Step 1. TODO (neutered data)
-
-      // Step 2.
-      if dirty_rect.size.width < 0.0f64 {
-        dirty_rect.origin.x += dirty_rect.size.width;
-        dirty_rect.size.width = -dirty_rect.size.width;
-      }
-
-      if dirty_rect.size.height < 0.0f64 {
-        dirty_rect.origin.y += dirty_rect.size.height;
-        dirty_rect.size.height = -dirty_rect.size.height;
-      }
-
-      // Step 3.
-      if dirty_rect.origin.x < 0.0f64 {
-        dirty_rect.size.width += dirty_rect.origin.x;
-        dirty_rect.origin.x = 0.0f64;
-      }
-
-      if dirty_rect.origin.y < 0.0f64 {
-        dirty_rect.size.height += dirty_rect.origin.y;
-        dirty_rect.origin.y = 0.0f64;
-      }
-
-      // Step 4.
-      if dirty_rect.max_x() > image_data_size.width {
-        dirty_rect.size.width = image_data_size.width - dirty_rect.origin.x;
-      }
-
-      if dirty_rect.max_y() > image_data_size.height {
-        dirty_rect.size.height = image_data_size.height - dirty_rect.origin.y;
-      }
-
-      // 5) If either dirtyWidth or dirtyHeight is negative or zero,
-      // stop without affecting any bitmaps
-      if dirty_rect.size.width <= 0.0 || dirty_rect.size.height <= 0.0 {
-        return
-      }
-
-      // Step 6.
-      let dest_rect = dirty_rect.translate(&offset).to_i32();
-
-      // azure_hl operates with integers. We need to cast the image size
-      let image_size = image_data_size.to_i32();
-
-      let first_pixel = dest_rect.origin - offset.to_i32();
-      let mut src_line = (first_pixel.y * (image_size.width * 4) + first_pixel.x * 4) as usize;
-
-      let mut dest =
-        Vec::with_capacity((dest_rect.size.width * dest_rect.size.height * 4) as usize);
-
-      for _ in 0 .. dest_rect.size.height {
-        let mut src_offset = src_line;
-        for _ in 0 .. dest_rect.size.width {
-          let alpha = imagedata[src_offset + 3] as u16;
-          // add 127 before dividing for more accurate rounding
-          let premultiply_channel = |channel: u8| (((channel as u16 * alpha) + 127) / 255) as u8;
-          dest.push(premultiply_channel(imagedata[src_offset + 2]));
-          dest.push(premultiply_channel(imagedata[src_offset + 1]));
-          dest.push(premultiply_channel(imagedata[src_offset + 0]));
-          dest.push(imagedata[src_offset + 3]);
-          src_offset += 4;
-        }
-        src_line += (image_size.width * 4) as usize;
-      }
-
-      if let Some(source_surface) = self.drawtarget.create_source_surface_from_data(
-              &dest,
-              dest_rect.size,
-              dest_rect.size.width * 4,
-              SurfaceFormat::B8G8R8A8) {
-        self.drawtarget.copy_surface(source_surface,
-                                      Rect::new(Point2D::new(0, 0), dest_rect.size),
-                                      dest_rect.origin);
-      }
+    if let Some(source_surface) = self.drawtarget.create_source_surface_from_data(
+            &dest,
+            dest_rect.size,
+            dest_rect.size.width * 4,
+            SurfaceFormat::B8G8R8A8) {
+      self.drawtarget.copy_surface(source_surface,
+                                    Rect::new(Point2D::new(0, 0), dest_rect.size),
+                                    dest_rect.origin);
+    }
   }
 
   pub fn image_data(&self, dest_rect: Rect<i32>, canvas_size: Size2D<f64>, chan: Sender<Vec<u8>>) {
-    let mut dest_data = self.read_pixels(dest_rect, canvas_size);
+    let dest_data = self.read_pixels(dest_rect, canvas_size);
 
     // bgra -> rgba
-    byte_swap(&mut dest_data);
+    let dest_data = byte_swap(dest_data);
     chan.send(dest_data).unwrap();
   }
 
@@ -837,7 +838,7 @@ fn crop_image(image_data: Vec<u8>,
 /// dest_rect: Area of the destination target where the pixels will be copied
 /// smoothing_enabled: It determines if smoothing is applied to the image result
 fn write_image(draw_target: &DrawTarget,
-              mut image_data: Vec<u8>,
+              image_data: Vec<u8>,
               image_size: Size2D<f64>,
               dest_rect: Rect<f64>,
               smoothing_enabled: bool,
@@ -848,7 +849,7 @@ fn write_image(draw_target: &DrawTarget,
   }
   let image_rect = Rect::new(Point2D::zero(), image_size);
   // rgba -> bgra
-  byte_swap(&mut image_data);
+  let image_data = byte_swap(image_data);
 
   // From spec https://html.spec.whatwg.org/multipage/#dom-context-2d-drawimage
   // When scaling up, if the imageSmoothingEnabled attribute is set to true, the user agent should attempt
@@ -1027,17 +1028,28 @@ impl ToAzureStyle for BlendingStyle {
   }
 }
 
-// TODO(pcwalton): Speed up with SIMD, or better yet, find some way to not do this.
-pub fn byte_swap(data: &mut [u8]) {
-  let length = data.len();
-  // FIXME(rust #27741): Range::step_by is not stable yet as of this writing.
-  let mut i = 0;
-  while i < length {
-    let r = data[i + 2];
-    data[i + 2] = data[i + 0];
-    data[i + 0] = r;
-    i += 4;
-  }
+pub fn byte_swap(data: Vec<u8>) -> Vec<u8> {
+  data.as_slice().simd_iter()
+    .simd_map(u8s(0),|v| {
+      let b1 = v.extract(0);
+      let r1 = v.extract(2);
+      v.replace(0, r1);
+      v.replace(2, b1);
+      let b2 = v.extract(4);
+      let r2 = v.extract(6);
+      v.replace(4, r2);
+      v.replace(6, b2);
+      let b3 = v.extract(8);
+      let r3 = v.extract(10);
+      v.replace(8, r3);
+      v.replace(10, b3);
+      let b4 = v.extract(12);
+      let r4 = v.extract(14);
+      v.replace(12, r4);
+      v.replace(14, b4);
+      v
+    })
+    .scalar_collect()
 }
 
 #[cfg(test)]
