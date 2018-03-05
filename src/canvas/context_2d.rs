@@ -91,67 +91,7 @@ impl <'a> Context2d<'a> {
         let msg = receiver.recv();
         match msg.unwrap() {
           CanvasMsg::Canvas2d(message) => {
-            match message {
-              Canvas2dMsg::FillText(text, x, y, max_width) => painter.fill_text(text, x, y, max_width),
-              Canvas2dMsg::StrokeText(text, x, y, max_width) => painter.stroke_text(text, x, y, max_width),
-              Canvas2dMsg::FillRect(ref rect) => painter.fill_rect(rect),
-              Canvas2dMsg::StrokeRect(ref rect) => painter.stroke_rect(rect),
-              Canvas2dMsg::ClearRect(ref rect) => painter.clear_rect(rect),
-              Canvas2dMsg::BeginPath => painter.begin_path(),
-              Canvas2dMsg::ClosePath => painter.close_path(),
-              Canvas2dMsg::Fill => painter.fill(),
-              Canvas2dMsg::Stroke => painter.stroke(),
-              Canvas2dMsg::Clip => painter.clip(),
-              Canvas2dMsg::IsPointInPath(x, y, fill_rule, chan) => {
-                painter.is_point_in_path(x, y, fill_rule, chan)
-              },
-              Canvas2dMsg::DrawImage(imagedata, image_size, dest_rect, source_rect,
-                                      smoothing_enabled) => {
-                painter.draw_image(imagedata, image_size, dest_rect, source_rect, smoothing_enabled)
-              }
-              Canvas2dMsg::DrawImageSelf(image_size, dest_rect, source_rect, smoothing_enabled) => {
-                painter.draw_image_self(image_size, dest_rect, source_rect, smoothing_enabled)
-              }
-              Canvas2dMsg::MoveTo(ref point) => painter.move_to(point),
-              Canvas2dMsg::LineTo(ref point) => painter.line_to(point),
-              Canvas2dMsg::Rect(ref rect) => painter.rect(rect),
-              Canvas2dMsg::QuadraticCurveTo(ref cp, ref pt) => {
-                painter.quadratic_curve_to(cp, pt)
-              }
-              Canvas2dMsg::BezierCurveTo(ref cp1, ref cp2, ref pt) => {
-                painter.bezier_curve_to(cp1, cp2, pt)
-              }
-              Canvas2dMsg::Arc(ref center, radius, start, end, ccw) => {
-                painter.arc(center, radius, start, end, ccw)
-              }
-              Canvas2dMsg::ArcTo(ref cp1, ref cp2, radius) => {
-                painter.arc_to(cp1, cp2, radius)
-              }
-              Canvas2dMsg::Ellipse(ref center, radius_x, radius_y, rotation, start, end, ccw) => {
-                painter.ellipse(center, radius_x, radius_y, rotation, start, end, ccw)
-              }
-              Canvas2dMsg::RestoreContext => painter.restore_context_state(),
-              Canvas2dMsg::SaveContext => painter.save_context_state(),
-              Canvas2dMsg::SetFillStyle(style) => painter.set_fill_style(style),
-              Canvas2dMsg::SetFontStyle(font_rule) => painter.set_font_style(&font_rule),
-              Canvas2dMsg::SetStrokeStyle(style) => painter.set_stroke_style(style),
-              Canvas2dMsg::SetLineWidth(width) => painter.set_line_width(width),
-              Canvas2dMsg::SetLineCap(cap) => painter.set_line_cap(cap),
-              Canvas2dMsg::SetLineJoin(join) => painter.set_line_join(join),
-              Canvas2dMsg::SetMiterLimit(limit) => painter.set_miter_limit(limit),
-              Canvas2dMsg::SetTransform(ref matrix) => painter.set_transform(matrix),
-              Canvas2dMsg::SetGlobalAlpha(alpha) => painter.set_global_alpha(alpha),
-              Canvas2dMsg::SetGlobalComposition(op) => painter.set_global_composition(op),
-              Canvas2dMsg::GetImageData(dest_rect, canvas_size, chan)
-                  => painter.image_data(dest_rect, canvas_size, chan),
-              Canvas2dMsg::PutImageData(imagedata, offset, image_data_size, dirty_rect)
-                  => painter.put_image_data(imagedata, offset, image_data_size, dirty_rect),
-              Canvas2dMsg::SetShadowOffsetX(value) => painter.set_shadow_offset_x(value),
-              Canvas2dMsg::SetShadowOffsetY(value) => painter.set_shadow_offset_y(value),
-              Canvas2dMsg::SetShadowBlur(value) => painter.set_shadow_blur(value),
-              Canvas2dMsg::SetShadowColor(ref color) => painter.set_shadow_color(color.to_azure_style()),
-              Canvas2dMsg::NotImplement => { },
-            }
+            painter.handle_canvas2d_msg(message);
           },
           CanvasMsg::Close => break,
           CanvasMsg::FromScript(message) => {
@@ -166,6 +106,70 @@ impl <'a> Context2d<'a> {
     }).expect("Thread spawning failed");
 
     sender
+  }
+
+  pub fn handle_canvas2d_msg(&mut self, message: Canvas2dMsg) {
+    match message {
+      Canvas2dMsg::FillText(text, x, y, max_width) => self.fill_text(text, x, y, max_width),
+      Canvas2dMsg::StrokeText(text, x, y, max_width) => self.stroke_text(text, x, y, max_width),
+      Canvas2dMsg::FillRect(ref rect) => self.fill_rect(rect),
+      Canvas2dMsg::StrokeRect(ref rect) => self.stroke_rect(rect),
+      Canvas2dMsg::ClearRect(ref rect) => self.clear_rect(rect),
+      Canvas2dMsg::BeginPath => self.begin_path(),
+      Canvas2dMsg::ClosePath => self.close_path(),
+      Canvas2dMsg::Fill => self.fill(),
+      Canvas2dMsg::Stroke => self.stroke(),
+      Canvas2dMsg::Clip => self.clip(),
+      Canvas2dMsg::IsPointInPath(x, y, fill_rule, chan) => {
+        self.is_point_in_path(x, y, fill_rule, chan)
+      },
+      Canvas2dMsg::DrawImage(imagedata, image_size, dest_rect, source_rect,
+                              smoothing_enabled) => {
+        self.draw_image(imagedata, image_size, dest_rect, source_rect, smoothing_enabled)
+      }
+      Canvas2dMsg::DrawImageSelf(image_size, dest_rect, source_rect, smoothing_enabled) => {
+        self.draw_image_self(image_size, dest_rect, source_rect, smoothing_enabled)
+      }
+      Canvas2dMsg::MoveTo(ref point) => self.move_to(point),
+      Canvas2dMsg::LineTo(ref point) => self.line_to(point),
+      Canvas2dMsg::Rect(ref rect) => self.rect(rect),
+      Canvas2dMsg::QuadraticCurveTo(ref cp, ref pt) => {
+        self.quadratic_curve_to(cp, pt)
+      }
+      Canvas2dMsg::BezierCurveTo(ref cp1, ref cp2, ref pt) => {
+        self.bezier_curve_to(cp1, cp2, pt)
+      }
+      Canvas2dMsg::Arc(ref center, radius, start, end, ccw) => {
+        self.arc(center, radius, start, end, ccw)
+      }
+      Canvas2dMsg::ArcTo(ref cp1, ref cp2, radius) => {
+        self.arc_to(cp1, cp2, radius)
+      }
+      Canvas2dMsg::Ellipse(ref center, radius_x, radius_y, rotation, start, end, ccw) => {
+        self.ellipse(center, radius_x, radius_y, rotation, start, end, ccw)
+      }
+      Canvas2dMsg::RestoreContext => self.restore_context_state(),
+      Canvas2dMsg::SaveContext => self.save_context_state(),
+      Canvas2dMsg::SetFillStyle(style) => self.set_fill_style(style),
+      Canvas2dMsg::SetFontStyle(font_rule) => self.set_font_style(&font_rule),
+      Canvas2dMsg::SetStrokeStyle(style) => self.set_stroke_style(style),
+      Canvas2dMsg::SetLineWidth(width) => self.set_line_width(width),
+      Canvas2dMsg::SetLineCap(cap) => self.set_line_cap(cap),
+      Canvas2dMsg::SetLineJoin(join) => self.set_line_join(join),
+      Canvas2dMsg::SetMiterLimit(limit) => self.set_miter_limit(limit),
+      Canvas2dMsg::SetTransform(ref matrix) => self.set_transform(matrix),
+      Canvas2dMsg::SetGlobalAlpha(alpha) => self.set_global_alpha(alpha),
+      Canvas2dMsg::SetGlobalComposition(op) => self.set_global_composition(op),
+      Canvas2dMsg::GetImageData(dest_rect, canvas_size, chan)
+          => self.image_data(dest_rect, canvas_size, chan),
+      Canvas2dMsg::PutImageData(imagedata, offset, image_data_size, dirty_rect)
+          => self.put_image_data(imagedata, offset, image_data_size, dirty_rect),
+      Canvas2dMsg::SetShadowOffsetX(value) => self.set_shadow_offset_x(value),
+      Canvas2dMsg::SetShadowOffsetY(value) => self.set_shadow_offset_y(value),
+      Canvas2dMsg::SetShadowBlur(value) => self.set_shadow_blur(value),
+      Canvas2dMsg::SetShadowColor(ref color) => self.set_shadow_color(color.to_azure_style()),
+      Canvas2dMsg::NotImplement => { },
+    }
   }
 
   pub fn add_font_instance(&mut self, bytes: Vec<u8>, family_name: String) -> Result<(), ()> {
