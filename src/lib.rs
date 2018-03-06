@@ -19,9 +19,6 @@ extern crate io_surface;
 #[cfg(target_os="macos")]
 extern crate core_foundation;
 
-#[cfg(any(target_os = "linux", target_os = "android"))]
-extern crate egl;
-
 mod canvas;
 mod csshelper;
 mod fontrenderer;
