@@ -50,7 +50,7 @@ pub fn parse_fonts_style(input: &str) -> Font {
                   font_style = FontStyle::Italic;
                 } else if val == "oblique" {
                   font_style = FontStyle::Oblique;
-                } else {
+                } else if val != "normal" {
                   println!("font style: {} is illegal", val);
                 }
               }
