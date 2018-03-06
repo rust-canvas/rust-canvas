@@ -17,6 +17,7 @@ use azure::azure_hl::{PathBuilder, CapStyle, StrokeOptions};
 use azure::{AzFloat};
 use euclid::{Rect, Point2D, Vector2D, Transform2D, Size2D};
 use fonts::system_fonts;
+use image::{ImageBuffer, ImageRgba8, ImageFormat};
 use lyon_path::{PathEvent};
 use num_traits::ToPrimitive;
 use pathfinder_font_renderer::{FontContext, FontInstance, GlyphKey, SubpixelOffset};
@@ -731,11 +732,18 @@ impl <'a> Context2d<'a> {
   }
 
   fn image_data(&self, dest_rect: Rect<i32>, canvas_size: Size2D<f64>, chan: Sender<Vec<u8>>) {
-    let mut dest_data = self.read_pixels(dest_rect, canvas_size);
+    let mut image_data = self.read_pixels(dest_rect, canvas_size);
 
     // bgra -> rgba
-    byte_swap(&mut dest_data);
-    chan.send(dest_data).unwrap();
+    byte_swap(&mut image_data);
+    let mut dist = vec![];
+    {
+      let png_buffer = ImageBuffer::from_raw(canvas_size.width as u32, canvas_size.height as u32, image_data).unwrap();
+      let dynamic_image = ImageRgba8(png_buffer);
+      dynamic_image.save(&mut dist, ImageFormat::PNG).unwrap();
+    };
+    let length = dist.len();
+    chan.send(dist).unwrap();
   }
 
   fn send_pixels(&mut self, chan: Sender<Option<Vec<u8>>>) {

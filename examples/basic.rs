@@ -3,14 +3,13 @@ extern crate euclid;
 extern crate image;
 extern crate rustcanvas;
 
-use std::fs::File;
 use std::f64::consts::PI;
+use std::fs::{File};
+use std::io::prelude::*;
 use std::sync::mpsc::{channel};
 
 use cssparser::{RGBA};
 use euclid::{Point2D, Size2D, Rect};
-use image::png::{PNGEncoder};
-use image::{ColorType};
 use rustcanvas::{create_canvas, CanvasContextType, FillOrStrokeStyle, CanvasMsg, Canvas2dMsg};
 
 fn main() {
@@ -49,10 +48,8 @@ fn main() {
 
   match receiver.recv() {
     Ok(pixels) => {
-      let f = File::create("./test.png").unwrap();
-      let png = PNGEncoder::new(f);
-      assert_eq!(pixels.len(), 1920 * 1080 * 4);
-      png.encode(&pixels, 1920, 1080, ColorType::RGBA(8)).expect("Write File Error");
+      let mut f = File::create("./test.png").unwrap();
+      f.write(&pixels).unwrap();
     },
     Err(e) => panic!("Recv fail: {:?}", e),
   };

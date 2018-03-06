@@ -10,6 +10,7 @@ cssparser = { version = "0.23", features = ["serde"] }
 euclid = { version = "0.17", features = ["serde"] }
 font-loader = "0.6"
 gleam = "0.4"
+image = "0.18"
 lyon_path = "0.10"
 num-traits = "0.1"
 pathfinder_font_renderer = { git = "https://github.com/rust-canvas/pathfinder", branch = "rust-canvas", features = ["usefreetype"] }
@@ -22,6 +23,3 @@ servo-skia = "0.30000013.0"
 core-foundation = { version = "0.5.1", features = ["mac_os_10_8_features"] }
 cgl = "0.2"
 io-surface = "0.9"
-
-[dev-dependencies]
-image = "^0.18"

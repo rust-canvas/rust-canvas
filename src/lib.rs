@@ -5,6 +5,7 @@ extern crate euclid;
 extern crate font_loader as fonts;
 extern crate gleam;
 extern crate glutin;
+extern crate image;
 extern crate lyon_path;
 extern crate num_traits;
 extern crate pathfinder_font_renderer;
