@@ -259,7 +259,7 @@ impl <'a> Context2d<'a> {
       let glyph_dimensions = font_context.glyph_dimensions(&instance, &glyph_key, false).expect("Get glyph dimensions fail");
       let text_width = glyph_dimensions.size.width;
       let advance = glyph_dimensions.advance;
-      let advance_offset = (advance - text_width as f32) / 2.0 * scale;
+      let advance_offset = advance / 2.0 * scale;
       offset_x = offset_x + advance_offset;
       let text_width = text_width as f32 * scale;
       let glyph_outline = font_context.glyph_outline(&instance, &glyph_key).expect("Glyph outline fail");
