@@ -16,7 +16,6 @@ use azure::azure_hl::{LinearGradientPattern, ExtendMode, RadialGradientPattern, 
 use azure::azure_hl::{PathBuilder, CapStyle, StrokeOptions};
 use azure::{AzFloat};
 use euclid::{Rect, Point2D, Vector2D, Transform2D, Size2D};
-use faster::*;
 use fonts::system_fonts;
 use lyon_path::{PathEvent};
 use num_traits::ToPrimitive;
@@ -732,10 +731,10 @@ impl <'a> Context2d<'a> {
   }
 
   fn image_data(&self, dest_rect: Rect<i32>, canvas_size: Size2D<f64>, chan: Sender<Vec<u8>>) {
-    let dest_data = self.read_pixels(dest_rect, canvas_size);
+    let mut dest_data = self.read_pixels(dest_rect, canvas_size);
 
     // bgra -> rgba
-    let dest_data = byte_swap(dest_data);
+    byte_swap(&mut dest_data);
     chan.send(dest_data).unwrap();
   }
 
@@ -837,7 +836,7 @@ fn crop_image(image_data: Vec<u8>,
 /// dest_rect: Area of the destination target where the pixels will be copied
 /// smoothing_enabled: It determines if smoothing is applied to the image result
 fn write_image(draw_target: &DrawTarget,
-              image_data: Vec<u8>,
+              mut image_data: Vec<u8>,
               image_size: Size2D<f64>,
               dest_rect: Rect<f64>,
               smoothing_enabled: bool,
@@ -848,7 +847,7 @@ fn write_image(draw_target: &DrawTarget,
   }
   let image_rect = Rect::new(Point2D::zero(), image_size);
   // rgba -> bgra
-  let image_data = byte_swap(image_data);
+  byte_swap(&mut image_data);
 
   // From spec https://html.spec.whatwg.org/multipage/#dom-context-2d-drawimage
   // When scaling up, if the imageSmoothingEnabled attribute is set to true, the user agent should attempt
@@ -863,7 +862,7 @@ fn write_image(draw_target: &DrawTarget,
   let image_size = image_size.to_i32();
 
   if let Some(source_surface) =
-    draw_target.create_source_surface_from_data(&image_data,
+    draw_target.create_source_surface_from_data(&mut image_data,
                                                 image_size,
                                                 image_size.width * 4,
                                                 SurfaceFormat::B8G8R8A8) {
@@ -1027,28 +1026,16 @@ impl ToAzureStyle for BlendingStyle {
   }
 }
 
-pub fn byte_swap(data: Vec<u8>) -> Vec<u8> {
-  data.as_slice().simd_iter()
-    .simd_map(u8s(0),|v| {
-      let b1 = v.extract(0);
-      let r1 = v.extract(2);
-      let v = v.replace(0, r1);
-      let v = v.replace(2, b1);
-      let b2 = v.extract(4);
-      let r2 = v.extract(6);
-      let v = v.replace(4, r2);
-      let v = v.replace(6, b2);
-      let b3 = v.extract(8);
-      let r3 = v.extract(10);
-      let v = v.replace(8, r3);
-      let v = v.replace(10, b3);
-      let b4 = v.extract(12);
-      let r4 = v.extract(14);
-      let v = v.replace(12, r4);
-      let v = v.replace(14, b4);
-      v
-    })
-    .scalar_collect()
+pub fn byte_swap(data: &mut [u8]) {
+  let length = data.len();
+  // FIXME(rust #27741): Range::step_by is not stable yet as of this writing.
+  let mut i = 0;
+  while i < length {
+    let r = data[i + 2];
+    data[i + 2] = data[i + 0];
+    data[i + 0] = r;
+    i += 4;
+  }
 }
 
 #[cfg(test)]
