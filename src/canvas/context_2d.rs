@@ -1032,20 +1032,20 @@ pub fn byte_swap(data: Vec<u8>) -> Vec<u8> {
     .simd_map(u8s(0),|v| {
       let b1 = v.extract(0);
       let r1 = v.extract(2);
-      v.replace(0, r1);
-      v.replace(2, b1);
+      let v = v.replace(0, r1);
+      let v = v.replace(2, b1);
       let b2 = v.extract(4);
       let r2 = v.extract(6);
-      v.replace(4, r2);
-      v.replace(6, b2);
+      let v = v.replace(4, r2);
+      let v = v.replace(6, b2);
       let b3 = v.extract(8);
       let r3 = v.extract(10);
-      v.replace(8, r3);
-      v.replace(10, b3);
+      let v = v.replace(8, r3);
+      let v = v.replace(10, b3);
       let b4 = v.extract(12);
       let r4 = v.extract(14);
-      v.replace(12, r4);
-      v.replace(14, b4);
+      let v = v.replace(12, r4);
+      let v = v.replace(14, b4);
       v
     })
     .scalar_collect()
