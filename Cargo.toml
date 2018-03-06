@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["LongYinan <lynweklm@gmail.com>"]
 
 [dependencies]
-app_units = "0.5"
+app_units = "0.6"
 azure = "0.28"
 cssparser = { version = "0.23", features = ["serde"] }
 euclid = { version = "0.17", features = ["serde"] }

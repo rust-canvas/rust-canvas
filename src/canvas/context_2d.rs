@@ -1,8 +1,9 @@
-use std::cell::RefCell;
-use std::collections::BTreeMap;
-use std::collections::btree_map::Entry;
+use std::cell::{RefCell};
+use std::collections::{BTreeMap};
+use std::collections::btree_map::{Entry};
 use std::mem;
-use std::sync::Arc;
+use std::sync::{Arc};
+use std::sync::atomic::{ATOMIC_USIZE_INIT, AtomicUsize, Ordering};
 use std::sync::mpsc::{Sender, channel};
 use std::thread;
 
@@ -19,7 +20,7 @@ use faster::*;
 use fonts::system_fonts;
 use lyon_path::{PathEvent};
 use num_traits::ToPrimitive;
-use pathfinder_font_renderer::{FontContext, FontKey, FontInstance, GlyphKey, SubpixelOffset};
+use pathfinder_font_renderer::{FontContext, FontInstance, GlyphKey, SubpixelOffset};
 
 use fontrenderer::{flip_text};
 use csshelper::{SANS_SERIF_FONT_FAMILY};
@@ -27,12 +28,23 @@ use super::canvas_trait::*;
 use super::paintstate::{Font, PaintState};
 use super::get_target::{get_draw_target};
 
+static NEXT_FONT_KEY: AtomicUsize = ATOMIC_USIZE_INIT;
+
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
+struct FontKey(usize);
+
+impl FontKey {
+  fn new() -> FontKey {
+    FontKey(NEXT_FONT_KEY.fetch_add(1, Ordering::SeqCst))
+  }
+}
+
 pub struct Context2d<'a> {
   pub state: PaintState<'a>,
   saved_states: Vec<PaintState<'a>>,
   drawtarget: DrawTarget,
   path_builder: PathBuilder,
-  font_context: RefCell<FontContext>,
+  font_context: RefCell<FontContext<FontKey>>,
   font_caches: BTreeMap<String, FontKey>,
 }
 
@@ -110,7 +122,7 @@ impl <'a> Context2d<'a> {
     sender
   }
 
-  pub fn handle_canvas2d_msg(&mut self, message: Canvas2dMsg) {
+  fn handle_canvas2d_msg(&mut self, message: Canvas2dMsg) {
     match message {
       Canvas2dMsg::FillText(text, x, y, max_width) => self.fill_text(text, x, y, max_width),
       Canvas2dMsg::StrokeText(text, x, y, max_width) => self.stroke_text(text, x, y, max_width),
@@ -174,7 +186,7 @@ impl <'a> Context2d<'a> {
     }
   }
 
-  pub fn add_font_instance(&mut self, bytes: Vec<u8>, family_name: String) -> Result<(), ()> {
+  fn add_font_instance(&mut self, bytes: Vec<u8>, family_name: String) -> Result<(), ()> {
     match self.font_caches.entry(family_name) {
       Entry::Occupied(_) => Ok(()),
       Entry::Vacant(entry) => {
@@ -190,11 +202,11 @@ impl <'a> Context2d<'a> {
     }
   }
 
-  pub fn save_context_state(&mut self) {
+  fn save_context_state(&mut self) {
     self.saved_states.push(self.state.clone());
   }
 
-  pub fn restore_context_state(&mut self) {
+  fn restore_context_state(&mut self) {
     if let Some(state) = self.saved_states.pop() {
       mem::replace(&mut self.state, state);
       self.drawtarget.set_transform(&self.state.transform);
@@ -202,17 +214,17 @@ impl <'a> Context2d<'a> {
     }
   }
 
-  pub fn fill_text(&mut self, text: String, x: f32, y: f32, max_width: Option<f32>) {
+  fn fill_text(&mut self, text: String, x: f32, y: f32, max_width: Option<f32>) {
     self.draw_text(text, x, y, max_width);
     self.fill();
   }
 
-  pub fn stroke_text(&mut self, text: String, x: f32, y: f32, max_width: Option<f32>) {
+  fn stroke_text(&mut self, text: String, x: f32, y: f32, max_width: Option<f32>) {
     self.draw_text(text, x, y, max_width);
     self.stroke();
   }
 
-  pub fn draw_text(&mut self, text: String, x: f32, y: f32, max_width: Option<f32>) {
+  fn draw_text(&mut self, text: String, x: f32, y: f32, max_width: Option<f32>) {
     let font = &self.state.font;
     let family = &font.font_family;
     let font_keys = &self.font_caches;
@@ -221,7 +233,7 @@ impl <'a> Context2d<'a> {
       Some(f) => f,
       None => font_keys.get(SANS_SERIF_FONT_FAMILY).expect("Get fallback font fail"),
     };
-    let instance = FontInstance::new(&font_key, Au::from_px(* size as i32));
+    let instance = FontInstance::new(font_key, Au::from_px(* size as i32));
     let mut offset_x = x;
     let scale = match max_width {
       Some(m) => {
@@ -229,7 +241,7 @@ impl <'a> Context2d<'a> {
           let font_context = self.font_context.borrow();
           let pos = font_context.get_char_index(&font_key, c).expect("Get Char index font_context fail");
           let glyph_key = GlyphKey::new(pos, SubpixelOffset(0));
-          let glyph_dimensions = font_context.glyph_dimensions(&instance, &glyph_key).expect("Get glyph dimensions fail");
+          let glyph_dimensions = font_context.glyph_dimensions(&instance, &glyph_key, false).expect("Get glyph dimensions fail");
           glyph_dimensions.advance
         }).sum::<f32>();
         if total_width > m {
@@ -241,47 +253,42 @@ impl <'a> Context2d<'a> {
       None => 1.0,
     };
     text.chars().for_each(|c| {
-      let (text_width, advance_offset, glyph_key) = {
-        let font_context = self.font_context.borrow();
-        let pos = font_context.get_char_index(&font_key, c).expect("Get Char index font_context fail");
-        let glyph_key = GlyphKey::new(pos, SubpixelOffset(0));
-        let glyph_dimensions = font_context.glyph_dimensions(&instance, &glyph_key).expect("Get glyph dimensions fail");
-        let text_width = glyph_dimensions.size.width;
-        let advance = glyph_dimensions.advance;
-        let advance_offset = (advance - text_width as f32) / 2.0 * scale;
-        offset_x = offset_x + advance_offset;
-        (text_width as f32 * scale, advance_offset, glyph_key)
-      };
-      {
-        let mut mut_font_context = self.font_context.borrow_mut();
-        let glyph_outline = mut_font_context.glyph_outline(&instance, &glyph_key).expect("Glyph outline fail");
-        glyph_outline.iter()
-          .map(|e| flip_text(scale)(e))
-          .for_each(|f| match f {
-            PathEvent::MoveTo(p) => self.move_to(
-              &Point2D::new(p.x + offset_x, p.y + y)
-            ),
-            PathEvent::LineTo(p) => self.line_to(&Point2D::new(p.x + offset_x, p.y + y)),
-            PathEvent::QuadraticTo(cp, ep) => self.quadratic_curve_to(
-              &Point2D::new(cp.x + offset_x, cp.y + y), &Point2D::new(ep.x + offset_x, ep.y + y)
-            ),
-            PathEvent::Close => self.close_path(),
-            PathEvent::CubicTo(cp1, cp2, ep) => self.bezier_curve_to(
-              &Point2D::new(cp1.x + offset_x, cp1.y + y),
-              &Point2D::new(cp2.x + offset_x, cp2.y + y),
-              &Point2D::new(ep.x + offset_x, ep.y + y)
-            ),
-            PathEvent::Arc(c, r, s, e) => self.arc(
-              &Point2D::new(c.x + offset_x, c.y + y),
-              r.angle_from_x_axis().get(), s.get(), e.get(), false
-            )
-          });
-      };
+      let font_context = self.font_context.borrow();
+      let pos = font_context.get_char_index(&font_key, c).expect("Get Char index font_context fail");
+      let glyph_key = GlyphKey::new(pos, SubpixelOffset(0));
+      let glyph_dimensions = font_context.glyph_dimensions(&instance, &glyph_key, false).expect("Get glyph dimensions fail");
+      let text_width = glyph_dimensions.size.width;
+      let advance = glyph_dimensions.advance;
+      let advance_offset = (advance - text_width as f32) / 2.0 * scale;
+      offset_x = offset_x + advance_offset;
+      let text_width = text_width as f32 * scale;
+      let glyph_outline = font_context.glyph_outline(&instance, &glyph_key).expect("Glyph outline fail");
+      glyph_outline.iter()
+        .map(|e| flip_text(scale)(e))
+        .for_each(|f| match f {
+          PathEvent::MoveTo(p) => self.move_to(
+            &Point2D::new(p.x + offset_x, p.y + y)
+          ),
+          PathEvent::LineTo(p) => self.line_to(&Point2D::new(p.x + offset_x, p.y + y)),
+          PathEvent::QuadraticTo(cp, ep) => self.quadratic_curve_to(
+            &Point2D::new(cp.x + offset_x, cp.y + y), &Point2D::new(ep.x + offset_x, ep.y + y)
+          ),
+          PathEvent::Close => self.close_path(),
+          PathEvent::CubicTo(cp1, cp2, ep) => self.bezier_curve_to(
+            &Point2D::new(cp1.x + offset_x, cp1.y + y),
+            &Point2D::new(cp2.x + offset_x, cp2.y + y),
+            &Point2D::new(ep.x + offset_x, ep.y + y)
+          ),
+          PathEvent::Arc(c, r, s, e) => self.arc(
+            &Point2D::new(c.x + offset_x, c.y + y),
+            r.angle_from_x_axis().get(), s.get(), e.get(), false
+          )
+        });
       offset_x = offset_x + advance_offset + text_width;
     });
   }
 
-  pub fn fill_rect(&self, rect: &Rect<f32>) {
+  fn fill_rect(&self, rect: &Rect<f32>) {
     if is_zero_size_gradient(&self.state.fill_style) {
       return; // Paint nothing if gradient size is zero.
     }
@@ -312,11 +319,11 @@ impl <'a> Context2d<'a> {
     }
   }
 
-  pub fn clear_rect(&self, rect: &Rect<f32>) {
+  fn clear_rect(&self, rect: &Rect<f32>) {
     self.drawtarget.clear_rect(rect);
   }
 
-  pub fn stroke_rect(&self, rect: &Rect<f32>) {
+  fn stroke_rect(&self, rect: &Rect<f32>) {
     if is_zero_size_gradient(&self.state.stroke_style) {
       return; // Paint nothing if gradient size is zero.
     }
@@ -347,15 +354,15 @@ impl <'a> Context2d<'a> {
     }
   }
 
-  pub fn begin_path(&mut self) {
+  fn begin_path(&mut self) {
     self.path_builder = self.drawtarget.create_path_builder()
   }
 
-  pub fn close_path(&self) {
+  fn close_path(&self) {
     self.path_builder.close()
   }
 
-  pub fn fill(&self) {
+  fn fill(&self) {
     if is_zero_size_gradient(&self.state.fill_style) {
       return; // Paint nothing if gradient size is zero.
     }
@@ -365,7 +372,7 @@ impl <'a> Context2d<'a> {
                           &self.state.draw_options);
   }
 
-  pub fn stroke(&self) {
+  fn stroke(&self) {
     if is_zero_size_gradient(&self.state.stroke_style) {
       return; // Paint nothing if gradient size is zero.
     }
@@ -376,11 +383,11 @@ impl <'a> Context2d<'a> {
                             &self.state.draw_options);
   }
 
-  pub fn clip(&self) {
+  fn clip(&self) {
     self.drawtarget.push_clip(&self.path_builder.finish());
   }
 
-  pub fn is_point_in_path(&mut self, x: f64, y: f64,
+  fn is_point_in_path(&mut self, x: f64, y: f64,
                       _fill_rule: FillRule, chan: Sender<bool>) {
     let path = self.path_builder.finish();
     let result = path.contains_point(x, y, &self.state.transform);
@@ -388,7 +395,7 @@ impl <'a> Context2d<'a> {
     chan.send(result).unwrap();
   }
 
-  pub fn draw_image(&self, image_data: Vec<u8>, image_size: Size2D<f64>,
+  fn draw_image(&self, image_data: Vec<u8>, image_size: Size2D<f64>,
                 dest_rect: Rect<f64>, source_rect: Rect<f64>, smoothing_enabled: bool) {
       // We round up the floating pixel values to draw the pixels
     let source_rect = source_rect.ceil();
@@ -411,7 +418,7 @@ impl <'a> Context2d<'a> {
     }
   }
 
-  pub fn create_draw_target_for_shadow(&self, source_rect: &Rect<f32>) -> DrawTarget {
+  fn create_draw_target_for_shadow(&self, source_rect: &Rect<f32>) -> DrawTarget {
     let draw_target = self.drawtarget.create_similar_draw_target(&Size2D::new(source_rect.size.width as i32,
                                                                               source_rect.size.height as i32),
                                                                   self.drawtarget.get_format());
@@ -422,7 +429,7 @@ impl <'a> Context2d<'a> {
     draw_target
   }
 
-  pub fn ellipse(&mut self,
+  fn ellipse(&mut self,
           center: &Point2D<AzFloat>,
           radius_x: AzFloat,
           radius_y: AzFloat,
@@ -433,76 +440,76 @@ impl <'a> Context2d<'a> {
     self.path_builder.ellipse(*center, radius_x, radius_y, rotation_angle, start_angle, end_angle, ccw);
   }
 
-  pub fn set_fill_style(&mut self, style: FillOrStrokeStyle) {
+  fn set_fill_style(&mut self, style: FillOrStrokeStyle) {
     if let Some(pattern) = style.to_azure_pattern(&self.drawtarget) {
       self.state.fill_style = pattern
     }
   }
 
-  pub fn set_font_style(&mut self, font_style: &str) {
+  fn set_font_style(&mut self, font_style: &str) {
     self.state.font = Font::new(font_style);
   }
 
-  pub fn set_stroke_style(&mut self, style: FillOrStrokeStyle) {
+  fn set_stroke_style(&mut self, style: FillOrStrokeStyle) {
     if let Some(pattern) = style.to_azure_pattern(&self.drawtarget) {
       self.state.stroke_style = pattern
     }
   }
 
-  pub fn set_line_width(&mut self, width: f32) {
+  fn set_line_width(&mut self, width: f32) {
     self.state.stroke_opts.line_width = width;
   }
 
-  pub fn set_line_cap(&mut self, cap: LineCapStyle) {
+  fn set_line_cap(&mut self, cap: LineCapStyle) {
     self.state.stroke_opts.line_cap = cap.to_azure_style();
   }
 
-  pub fn set_line_join(&mut self, join: LineJoinStyle) {
+  fn set_line_join(&mut self, join: LineJoinStyle) {
     self.state.stroke_opts.line_join = join.to_azure_style();
   }
 
-  pub fn set_miter_limit(&mut self, limit: f32) {
+  fn set_miter_limit(&mut self, limit: f32) {
     self.state.stroke_opts.miter_limit = limit;
   }
 
-  pub fn set_transform(&mut self, transform: &Transform2D<f32>) {
+  fn set_transform(&mut self, transform: &Transform2D<f32>) {
     self.state.transform = transform.clone();
     self.drawtarget.set_transform(transform)
   }
 
-  pub fn set_global_alpha(&mut self, alpha: f32) {
+  fn set_global_alpha(&mut self, alpha: f32) {
     self.state.draw_options.alpha = alpha;
   }
 
-  pub fn set_global_composition(&mut self, op: CompositionOrBlending) {
+  fn set_global_composition(&mut self, op: CompositionOrBlending) {
     self.state.draw_options.set_composition_op(op.to_azure_style());
   }
 
-  pub fn set_shadow_offset_x(&mut self, value: f64) {
+  fn set_shadow_offset_x(&mut self, value: f64) {
     self.state.shadow_offset_x = value;
   }
 
-  pub fn set_shadow_offset_y(&mut self, value: f64) {
+  fn set_shadow_offset_y(&mut self, value: f64) {
     self.state.shadow_offset_y = value;
   }
 
-  pub fn set_shadow_blur(&mut self, value: f64) {
+  fn set_shadow_blur(&mut self, value: f64) {
     self.state.shadow_blur = value;
   }
 
-  pub fn set_shadow_color(&mut self, value: Color) {
+  fn set_shadow_color(&mut self, value: Color) {
     self.state.shadow_color = value;
   }
 
   // https://html.spec.whatwg.org/multipage/#when-shadows-are-drawn
-  pub fn need_to_draw_shadow(&self) -> bool {
+  fn need_to_draw_shadow(&self) -> bool {
     self.state.shadow_color.a != 0.0f32 &&
     (self.state.shadow_offset_x != 0.0f64 ||
       self.state.shadow_offset_y != 0.0f64 ||
       self.state.shadow_blur != 0.0f64)
   }
 
-  pub fn draw_with_shadow<F>(&self, rect: &Rect<f32>, draw_shadow_source: F)
+  fn draw_with_shadow<F>(&self, rect: &Rect<f32>, draw_shadow_source: F)
       where F: FnOnce(&DrawTarget)
   {
     let shadow_src_rect = self.state.transform.transform_rect(rect);
@@ -518,7 +525,7 @@ impl <'a> Context2d<'a> {
                                             self.state.draw_options.composition);
   }
 
-  pub fn draw_image_self(&self, image_size: Size2D<f64>,
+  fn draw_image_self(&self, image_size: Size2D<f64>,
                       dest_rect: Rect<f64>, source_rect: Rect<f64>,
                       smoothing_enabled: bool) {
     // Reads pixels from source image
@@ -542,15 +549,15 @@ impl <'a> Context2d<'a> {
     }
   }
 
-  pub fn move_to(&self, point: &Point2D<AzFloat>) {
+  fn move_to(&self, point: &Point2D<AzFloat>) {
     self.path_builder.move_to(*point)
   }
 
-  pub fn line_to(&self, point: &Point2D<AzFloat>) {
+  fn line_to(&self, point: &Point2D<AzFloat>) {
     self.path_builder.line_to(*point)
   }
 
-  pub fn rect(&self, rect: &Rect<f32>) {
+  fn rect(&self, rect: &Rect<f32>) {
     self.path_builder.move_to(Point2D::new(rect.origin.x, rect.origin.y));
     self.path_builder.line_to(Point2D::new(rect.origin.x + rect.size.width, rect.origin.y));
     self.path_builder.line_to(Point2D::new(rect.origin.x + rect.size.width,
@@ -559,20 +566,20 @@ impl <'a> Context2d<'a> {
     self.path_builder.close();
   }
 
-  pub fn quadratic_curve_to(&self,
+  fn quadratic_curve_to(&self,
                           cp: &Point2D<AzFloat>,
                           endpoint: &Point2D<AzFloat>) {
     self.path_builder.quadratic_curve_to(cp, endpoint)
   }
 
-  pub fn bezier_curve_to(&self,
+  fn bezier_curve_to(&self,
                         cp1: &Point2D<AzFloat>,
                         cp2: &Point2D<AzFloat>,
                         endpoint: &Point2D<AzFloat>) {
     self.path_builder.bezier_curve_to(cp1, cp2, endpoint)
   }
 
-  pub fn arc(&self,
+  fn arc(&self,
             center: &Point2D<AzFloat>,
             radius: AzFloat,
             start_angle: AzFloat,
@@ -581,7 +588,7 @@ impl <'a> Context2d<'a> {
     self.path_builder.arc(*center, radius, start_angle, end_angle, ccw)
   }
 
-  pub fn arc_to(&self,
+  fn arc_to(&self,
                 cp1: &Point2D<AzFloat>,
                 cp2: &Point2D<AzFloat>,
                 radius: AzFloat) {
@@ -637,7 +644,7 @@ impl <'a> Context2d<'a> {
   }
 
   // https://html.spec.whatwg.org/multipage/#dom-context-2d-putimagedata
-  pub fn put_image_data(&mut self, imagedata: Vec<u8>,
+  fn put_image_data(&mut self, imagedata: Vec<u8>,
                     offset: Vector2D<f64>,
                     image_data_size: Size2D<f64>,
                     mut dirty_rect: Rect<f64>) {
@@ -724,7 +731,7 @@ impl <'a> Context2d<'a> {
     }
   }
 
-  pub fn image_data(&self, dest_rect: Rect<i32>, canvas_size: Size2D<f64>, chan: Sender<Vec<u8>>) {
+  fn image_data(&self, dest_rect: Rect<i32>, canvas_size: Size2D<f64>, chan: Sender<Vec<u8>>) {
     let dest_data = self.read_pixels(dest_rect, canvas_size);
 
     // bgra -> rgba
@@ -732,15 +739,7 @@ impl <'a> Context2d<'a> {
     chan.send(dest_data).unwrap();
   }
 
-  pub fn send_pixels_sync(&mut self) -> Vec<u8> {
-    let mut src_data = Vec::new();
-    self.drawtarget.snapshot().get_data_surface().with_data(|element| {
-      src_data = element.to_vec()
-    });
-    src_data
-  }
-
-  pub fn send_pixels(&mut self, chan: Sender<Option<Vec<u8>>>) {
+  fn send_pixels(&mut self, chan: Sender<Option<Vec<u8>>>) {
     self.drawtarget.snapshot().get_data_surface().with_data(|element| {
       chan.send(Some(element.into())).unwrap();
     })
