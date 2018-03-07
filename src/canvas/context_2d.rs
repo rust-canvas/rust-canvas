@@ -102,7 +102,7 @@ impl <'a> Context2d<'a> {
       let mut painter = Context2d::new(size);
       loop {
         let msg = receiver.recv();
-        match msg.unwrap() {
+        match msg.expect("CanvasThread recive msg fail") {
           CanvasMsg::Canvas2d(message) => {
             painter.handle_canvas2d_msg(message);
           },
@@ -735,12 +735,12 @@ impl <'a> Context2d<'a> {
 
     // bgra -> rgba
     byte_swap(&mut dest_data);
-    chan.send(dest_data).unwrap();
+    chan.send(dest_data).expect("Send image_data fail");
   }
 
   fn send_pixels(&mut self, chan: Sender<Option<Vec<u8>>>) {
     self.drawtarget.snapshot().get_data_surface().with_data(|element| {
-      chan.send(Some(element.into())).unwrap();
+      chan.send(Some(element.into())).expect("Send pixels fail");
     })
   }
 }
