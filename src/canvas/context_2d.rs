@@ -408,12 +408,12 @@ impl <'a> Context2d<'a> {
       self.draw_with_shadow(&rect, |new_draw_target: &DrawTarget| {
         write_image(&new_draw_target, image_data, source_rect.size, dest_rect,
                     smoothing_enabled, self.state.draw_options.composition,
-                    0.0);
+                    self.state.draw_options.alpha);
       });
     } else {
       write_image(&self.drawtarget, image_data, source_rect.size, dest_rect,
                   smoothing_enabled, self.state.draw_options.composition,
-                  0.0);
+                  self.state.draw_options.alpha);
     }
   }
 
