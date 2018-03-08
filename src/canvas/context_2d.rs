@@ -867,7 +867,7 @@ fn write_image(draw_target: &DrawTarget,
                                                 image_size.width * 4,
                                                 SurfaceFormat::B8G8R8A8) {
     let draw_surface_options = DrawSurfaceOptions::new(filter, true);
-    let draw_options = DrawOptions::new(global_alpha, composition_op, AntialiasMode::None);
+    let draw_options = DrawOptions::new(global_alpha, composition_op, AntialiasMode::Subpixel);
 
     draw_target.draw_surface(source_surface,
                               dest_rect.to_azure_style(),
