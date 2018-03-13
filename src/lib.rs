@@ -19,6 +19,10 @@ extern crate io_surface;
 #[cfg(target_os="macos")]
 extern crate core_foundation;
 
+#[cfg(target_os="linux")]
+extern crate glx;
+extern crate x11;
+
 mod canvas;
 mod csshelper;
 mod fontrenderer;
