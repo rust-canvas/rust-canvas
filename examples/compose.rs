@@ -4,14 +4,12 @@ extern crate image;
 extern crate rustcanvas;
 
 use std::fs::File;
-use std::f64::consts::PI;
 use std::sync::mpsc::{channel};
 
-use cssparser::{RGBA};
 use euclid::{Point2D, Size2D, Rect};
-use image::png::{PNGDecoder, PNGEncoder};
-use image::{ColorType, DecodingResult, DynamicImage, ImageDecoder, open};
-use rustcanvas::{create_canvas, CanvasContextType, FillOrStrokeStyle, CanvasMsg, Canvas2dMsg};
+use image::png::{PNGEncoder};
+use image::{ColorType, DynamicImage, open};
+use rustcanvas::{create_canvas, CanvasContextType, CanvasMsg, Canvas2dMsg};
 
 fn main() {
   let canvas = create_canvas(1080, 1980, CanvasContextType::CTX2D);
@@ -19,7 +17,6 @@ fn main() {
   let (sender, receiver) = channel::<Vec<u8>>();
   let f1_raw = get_raw("examples/fixtures/6423a9e3-665c-4b4a-aaa4-5b9478c2f150.png");
   let f2_raw = get_raw("examples/fixtures/257bf48a-bf98-4e98-bfe5-410d71ec80b3.png");
-  println!("{}", f2_raw.len());
   renderer.send(
     CanvasMsg::Canvas2d(Canvas2dMsg::DrawImage(
       f1_raw,
