@@ -48,7 +48,7 @@ pub struct Context2d<'a> {
 }
 
 impl <'a> Context2d<'a> {
-  fn read_pixels(&mut self, read_rect: Rect<i32>, _canvas_size: Size2D<f64>) -> Vec<u8>{
+  fn read_pixels(&mut self, _read_rect: Rect<i32>, _canvas_size: Size2D<f64>) -> Vec<u8>{
     let surface = self.cairo_ctx.get_target();
     let image_surface = ImageSurface::from(surface).expect("ImageSurface from surface fail");
     let mut dist: Vec<u8> = vec![];
@@ -58,7 +58,7 @@ impl <'a> Context2d<'a> {
   }
 
   pub fn new(size: Size2D<i32>) -> Context2d<'a> {
-    let drawtarget = DrawTarget::new(BackendType::CoreGraphics, size, SurfaceFormat::B8G8R8A8);
+    let drawtarget = DrawTarget::new(BackendType::Skia, size, SurfaceFormat::B8G8R8A8);
     let path_builder = drawtarget.create_path_builder();
     let image_surface = ImageSurface::create(Format::ARgb32, size.width, size.height)
       .expect("create cairo image surface fail");
@@ -406,8 +406,9 @@ impl <'a> Context2d<'a> {
   }
 
   fn set_fill_style(&mut self, style: FillOrStrokeStyle) {
-    if let Some(pattern) = style.to_azure_pattern(&self.drawtarget) {
-      self.state.fill_style = pattern
+    match style {
+      FillOrStrokeStyle::Color(rgba) => self.cairo_ctx.set_source_rgba(rgba.red as f64 / 255.0f64, rgba.green as f64 / 255.0f64, rgba.blue as f64 / 255.0f64, rgba.alpha as f64 / 255.0f64),
+      _ => { },
     }
   }
 
@@ -416,8 +417,9 @@ impl <'a> Context2d<'a> {
   }
 
   fn set_stroke_style(&mut self, style: FillOrStrokeStyle) {
-    if let Some(pattern) = style.to_azure_pattern(&self.drawtarget) {
-      self.state.stroke_style = pattern
+    match style {
+      FillOrStrokeStyle::Color(rgba) => self.cairo_ctx.set_source_rgba(rgba.red as f64 / 255.0f64, rgba.green as f64 / 255.0f64, rgba.blue as f64 / 255.0f64 , rgba.alpha as f64 / 255.0f64),
+      _ => { },
     }
   }
 

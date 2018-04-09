@@ -6,7 +6,7 @@ authors = ["LongYinan <lynweklm@gmail.com>"]
 [dependencies]
 app_units = "0.6"
 azure = "0.28"
-cairo-rs = { version = "0.4.1", features = ["png"] }
+cairo-rs = { version = "0.4", features = ["png"] }
 cssparser = { version = "0.23", features = ["serde"] }
 euclid = { version = "0.17", features = ["serde"] }
 font-loader = "0.6"
@@ -17,7 +17,6 @@ pathfinder_font_renderer = { git = "https://github.com/rust-canvas/pathfinder", 
 serde = "1.0"
 serde_derive = "1.0"
 glutin = "0.13"
-servo-skia = "0.30000013.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = { version = "0.5.1", features = ["mac_os_10_8_features"] }

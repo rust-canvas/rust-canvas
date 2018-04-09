@@ -11,7 +11,6 @@ extern crate num_traits;
 extern crate pathfinder_font_renderer;
 extern crate serde;
 #[macro_use] extern crate serde_derive;
-extern crate skia;
 
 #[cfg(target_os="macos")]
 extern crate cgl;
