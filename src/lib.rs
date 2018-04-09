@@ -1,5 +1,6 @@
 extern crate app_units;
 extern crate azure;
+extern crate cairo;
 extern crate cssparser;
 extern crate euclid;
 extern crate font_loader as fonts;

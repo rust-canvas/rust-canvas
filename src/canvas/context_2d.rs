@@ -8,13 +8,13 @@ use std::sync::mpsc::{Sender, channel};
 use std::thread;
 
 use app_units::Au;
-use azure::azure_hl::JoinStyle;
 use azure::azure_hl::GradientStop;
-use azure::azure_hl::{Pattern, DrawTarget, SurfaceFormat, DrawSurfaceOptions};
+use azure::azure_hl::{Pattern, BackendType, DrawTarget, SurfaceFormat, DrawSurfaceOptions};
 use azure::azure_hl::{AntialiasMode, CompositionOp, Color, DrawOptions, Filter, ColorPattern};
 use azure::azure_hl::{LinearGradientPattern, ExtendMode, RadialGradientPattern, SurfacePattern};
-use azure::azure_hl::{PathBuilder, CapStyle, StrokeOptions};
+use azure::azure_hl::{PathBuilder};
 use azure::{AzFloat};
+use cairo::{Context, Format, LineCap, LineJoin, ImageSurface, Operator};
 use euclid::{Rect, Point2D, Vector2D, Transform2D, Size2D};
 use fonts::system_fonts;
 use lyon_path::{PathEvent};
@@ -25,7 +25,6 @@ use fontrenderer::{flip_text};
 use csshelper::{SANS_SERIF_FONT_FAMILY};
 use super::canvas_trait::*;
 use super::paintstate::{Font, PaintState};
-use super::get_target::{get_draw_target};
 
 static NEXT_FONT_KEY: AtomicUsize = ATOMIC_USIZE_INIT;
 
@@ -41,6 +40,7 @@ impl FontKey {
 pub struct Context2d<'a> {
   pub state: PaintState<'a>,
   saved_states: Vec<PaintState<'a>>,
+  cairo_ctx: Context,
   drawtarget: DrawTarget,
   path_builder: PathBuilder,
   font_context: RefCell<FontContext<FontKey>>,
@@ -48,41 +48,27 @@ pub struct Context2d<'a> {
 }
 
 impl <'a> Context2d<'a> {
-  fn read_pixels(&self, read_rect: Rect<i32>, canvas_size: Size2D<f64>) -> Vec<u8>{
-    let canvas_size = canvas_size.to_i32();
-    let canvas_rect = Rect::new(Point2D::new(0i32, 0i32), canvas_size);
-    let src_read_rect = canvas_rect.intersection(&read_rect).unwrap_or(Rect::zero());
+  fn read_pixels(&mut self, read_rect: Rect<i32>, _canvas_size: Size2D<f64>) -> Vec<u8>{
+    let surface = self.cairo_ctx.get_target();
+    let image_surface = ImageSurface::from(surface).expect("ImageSurface from surface fail");
+    let mut dist: Vec<u8> = vec![];
+    image_surface.write_to_png(&mut dist).unwrap();
 
-    let mut image_data = vec![];
-    if src_read_rect.is_empty() || canvas_size.width <= 0 && canvas_size.height <= 0 {
-      return image_data;
-    }
-
-    let data_surface = self.drawtarget.snapshot().get_data_surface();
-    let mut src_data = Vec::new();
-    data_surface.with_data(|element| { src_data = element.to_vec(); });
-    let stride = data_surface.stride();
-
-    //start offset of the copyable rectangle
-    let mut src = (src_read_rect.origin.y * stride + src_read_rect.origin.x * 4) as usize;
-    //copy the data to the destination vector
-    for _ in 0..src_read_rect.size.height {
-      let row = &src_data[src .. src + (4 * src_read_rect.size.width) as usize];
-      image_data.extend_from_slice(row);
-      src += stride as usize;
-    }
-
-    image_data
+    dist
   }
 
   pub fn new(size: Size2D<i32>) -> Context2d<'a> {
-    let drawtarget = get_draw_target(size);
+    let drawtarget = DrawTarget::new(BackendType::CoreGraphics, size, SurfaceFormat::B8G8R8A8);
     let path_builder = drawtarget.create_path_builder();
+    let image_surface = ImageSurface::create(Format::ARgb32, size.width, size.height)
+      .expect("create cairo image surface fail");
+    let cairo_ctx = Context::new(&image_surface);
 
     let mut ctx = Context2d {
       state: PaintState::new(),
       saved_states: vec![],
       drawtarget,
+      cairo_ctx,
       path_builder,
       font_context: RefCell::new(FontContext::new().expect("init FontContext fail")),
       font_caches: BTreeMap::new(),
@@ -203,13 +189,13 @@ impl <'a> Context2d<'a> {
 
   fn save_context_state(&mut self) {
     self.saved_states.push(self.state.clone());
+    self.cairo_ctx.save();
   }
 
   fn restore_context_state(&mut self) {
     if let Some(state) = self.saved_states.pop() {
       mem::replace(&mut self.state, state);
-      self.drawtarget.set_transform(&self.state.transform);
-      self.drawtarget.pop_clip();
+      self.cairo_ctx.restore();
     }
   }
 
@@ -266,21 +252,21 @@ impl <'a> Context2d<'a> {
         .map(|e| flip_text(scale)(e))
         .for_each(|f| match f {
           PathEvent::MoveTo(p) => self.move_to(
-            &Point2D::new(p.x + offset_x, p.y + y)
+            &Point2D::new((p.x + offset_x) as f64, (p.y + y) as f64)
           ),
-          PathEvent::LineTo(p) => self.line_to(&Point2D::new(p.x + offset_x, p.y + y)),
+          PathEvent::LineTo(p) => self.line_to(&Point2D::new((p.x + offset_x) as f64, (p.y + y) as f64)),
           PathEvent::QuadraticTo(cp, ep) => self.quadratic_curve_to(
-            &Point2D::new(cp.x + offset_x, cp.y + y), &Point2D::new(ep.x + offset_x, ep.y + y)
+            &Point2D::new((cp.x + offset_x) as f64, (cp.y + y) as f64), &Point2D::new((ep.x + offset_x) as f64, (ep.y + y) as f64)
           ),
           PathEvent::Close => self.close_path(),
           PathEvent::CubicTo(cp1, cp2, ep) => self.bezier_curve_to(
-            &Point2D::new(cp1.x + offset_x, cp1.y + y),
-            &Point2D::new(cp2.x + offset_x, cp2.y + y),
-            &Point2D::new(ep.x + offset_x, ep.y + y)
+            &Point2D::new((cp1.x + offset_x) as f64, (cp1.y + y) as f64),
+            &Point2D::new((cp2.x + offset_x) as f64, (cp2.y + y) as f64),
+            &Point2D::new((ep.x + offset_x) as f64, (ep.y + y) as f64)
           ),
           PathEvent::Arc(c, r, s, e) => self.arc(
-            &Point2D::new(c.x + offset_x, c.y + y),
-            r.angle_from_x_axis().get(), s.get(), e.get(), false
+            &Point2D::new((c.x + offset_x) as f64, (c.y + y) as f64),
+            r.angle_from_x_axis().get() as f64, s.get() as f64, e.get() as f64, false
           )
         });
       offset_x = offset_x + advance_offset + text_width;
@@ -333,32 +319,19 @@ impl <'a> Context2d<'a> {
                                     &self.state.stroke_opts, &self.state.draw_options);
       });
     } else if rect.size.width == 0. || rect.size.height == 0. {
-      let cap = match self.state.stroke_opts.line_join {
-        JoinStyle::Round => CapStyle::Round,
-        _ => CapStyle::Butt
-      };
-
-      let stroke_opts =
-          StrokeOptions::new(self.state.stroke_opts.line_width,
-                              self.state.stroke_opts.line_join,
-                              cap,
-                              self.state.stroke_opts.miter_limit,
-                              self.state.stroke_opts.mDashPattern);
-      self.drawtarget.stroke_line(rect.origin, rect.bottom_right(),
-                                  self.state.stroke_style.to_pattern_ref(),
-                                  &stroke_opts, &self.state.draw_options);
+      self.cairo_ctx.stroke();
     } else {
       self.drawtarget.stroke_rect(rect, self.state.stroke_style.to_pattern_ref(),
                                   &self.state.stroke_opts, &self.state.draw_options);
     }
   }
 
-  fn begin_path(&mut self) {
-    self.path_builder = self.drawtarget.create_path_builder()
+  fn begin_path(&self) {
+    self.cairo_ctx.new_path();
   }
 
   fn close_path(&self) {
-    self.path_builder.close()
+    self.cairo_ctx.close_path()
   }
 
   fn fill(&self) {
@@ -366,9 +339,7 @@ impl <'a> Context2d<'a> {
       return; // Paint nothing if gradient size is zero.
     }
 
-    self.drawtarget.fill(&self.path_builder.finish(),
-                          self.state.fill_style.to_pattern_ref(),
-                          &self.state.draw_options);
+    self.cairo_ctx.fill();
   }
 
   fn stroke(&self) {
@@ -376,21 +347,16 @@ impl <'a> Context2d<'a> {
       return; // Paint nothing if gradient size is zero.
     }
 
-    self.drawtarget.stroke(&self.path_builder.finish(),
-                            self.state.stroke_style.to_pattern_ref(),
-                            &self.state.stroke_opts,
-                            &self.state.draw_options);
+    self.cairo_ctx.stroke();
   }
 
   fn clip(&self) {
-    self.drawtarget.push_clip(&self.path_builder.finish());
+    self.cairo_ctx.clip();
   }
 
   fn is_point_in_path(&mut self, x: f64, y: f64,
                       _fill_rule: FillRule, chan: Sender<bool>) {
-    let path = self.path_builder.finish();
-    let result = path.contains_point(x, y, &self.state.transform);
-    self.path_builder = path.copy_to_builder();
+    let result = self.cairo_ctx.in_stroke(x, y);
     chan.send(result).unwrap();
   }
 
@@ -455,20 +421,20 @@ impl <'a> Context2d<'a> {
     }
   }
 
-  fn set_line_width(&mut self, width: f32) {
-    self.state.stroke_opts.line_width = width;
+  fn set_line_width(&self, width: f64) {
+    self.cairo_ctx.set_line_width(width);
   }
 
   fn set_line_cap(&mut self, cap: LineCapStyle) {
-    self.state.stroke_opts.line_cap = cap.to_azure_style();
+    self.cairo_ctx.set_line_cap(cap.to_azure_style());
   }
 
-  fn set_line_join(&mut self, join: LineJoinStyle) {
-    self.state.stroke_opts.line_join = join.to_azure_style();
+  fn set_line_join(&self, join: LineJoinStyle) {
+    self.cairo_ctx.set_line_join(join.to_azure_style());
   }
 
-  fn set_miter_limit(&mut self, limit: f32) {
-    self.state.stroke_opts.miter_limit = limit;
+  fn set_miter_limit(&self, limit: f64) {
+    self.cairo_ctx.set_miter_limit(limit);
   }
 
   fn set_transform(&mut self, transform: &Transform2D<f32>) {
@@ -480,8 +446,8 @@ impl <'a> Context2d<'a> {
     self.state.draw_options.alpha = alpha;
   }
 
-  fn set_global_composition(&mut self, op: CompositionOrBlending) {
-    self.state.draw_options.set_composition_op(op.to_azure_style());
+  fn set_global_composition(&self, op: CompositionOrBlending) {
+    self.cairo_ctx.set_operator(op.to_azure_style());
   }
 
   fn set_shadow_offset_x(&mut self, value: f64) {
@@ -524,7 +490,7 @@ impl <'a> Context2d<'a> {
                                             self.state.draw_options.composition);
   }
 
-  fn draw_image_self(&self, image_size: Size2D<f64>,
+  fn draw_image_self(&mut self, image_size: Size2D<f64>,
                       dest_rect: Rect<f64>, source_rect: Rect<f64>,
                       smoothing_enabled: bool) {
     // Reads pixels from source image
@@ -548,12 +514,12 @@ impl <'a> Context2d<'a> {
     }
   }
 
-  fn move_to(&self, point: &Point2D<AzFloat>) {
-    self.path_builder.move_to(*point)
+  fn move_to(&self, point: &Point2D<f64>) {
+    self.cairo_ctx.move_to(point.x, point.y)
   }
 
-  fn line_to(&self, point: &Point2D<AzFloat>) {
-    self.path_builder.line_to(*point)
+  fn line_to(&self, point: &Point2D<f64>) {
+    self.cairo_ctx.line_to(point.x, point.y)
   }
 
   fn rect(&self, rect: &Rect<f32>) {
@@ -566,61 +532,70 @@ impl <'a> Context2d<'a> {
   }
 
   fn quadratic_curve_to(&self,
-                          cp: &Point2D<AzFloat>,
-                          endpoint: &Point2D<AzFloat>) {
-    self.path_builder.quadratic_curve_to(cp, endpoint)
+                          cp: &Point2D<f64>,
+                          endpoint: &Point2D<f64>) {
+    let (x, y) = self.cairo_ctx.get_current_point();
+    let cp1x = (x + 2.0f64 * cp.x) / 3.0f64;
+    let cp1y = (y + 2.0f64 * cp.y) / 3.0f64;
+    let cp2x = (endpoint.x + 2.0f64 * cp.x) / 3.0f64;
+    let cp2y = (endpoint.y + 2.0f64 * cp.y) / 3.0f64;
+    self.cairo_ctx.curve_to(cp1x, cp1y, cp2x, cp2y, endpoint.x, endpoint.y);
   }
 
   fn bezier_curve_to(&self,
-                        cp1: &Point2D<AzFloat>,
-                        cp2: &Point2D<AzFloat>,
-                        endpoint: &Point2D<AzFloat>) {
-    self.path_builder.bezier_curve_to(cp1, cp2, endpoint)
+                        cp1: &Point2D<f64>,
+                        cp2: &Point2D<f64>,
+                        endpoint: &Point2D<f64>) {
+    self.cairo_ctx.curve_to(cp1.x, cp1.y, cp2.x, cp2.y, endpoint.x, endpoint.y);
   }
 
   fn arc(&self,
-            center: &Point2D<AzFloat>,
-            radius: AzFloat,
-            start_angle: AzFloat,
-            end_angle: AzFloat,
+            center: &Point2D<f64>,
+            radius: f64,
+            start_angle: f64,
+            end_angle: f64,
             ccw: bool) {
-    self.path_builder.arc(*center, radius, start_angle, end_angle, ccw)
+    if !ccw {
+      self.cairo_ctx.arc(center.x, center.y, radius, start_angle, end_angle);
+    } else {
+      self.cairo_ctx.arc_negative(center.x, center.y, radius, start_angle, end_angle);
+    }
   }
 
   fn arc_to(&self,
-                cp1: &Point2D<AzFloat>,
-                cp2: &Point2D<AzFloat>,
-                radius: AzFloat) {
-    let cp0 = self.path_builder.get_current_point();
+                cp1: &Point2D<f64>,
+                cp2: &Point2D<f64>,
+                radius: f64) {
+    let (cpx, cpy) = self.cairo_ctx.get_current_point();
     let cp1 = *cp1;
     let cp2 = *cp2;
 
-    if (cp0.x == cp1.x && cp0.y == cp1.y) || cp1 == cp2 || radius == 0.0 {
+    if (cpx == cpx && cpy == cpy) || cp1 == cp2 || radius == 0.0 {
       self.line_to(&cp1);
       return;
     }
 
     // if all three control points lie on a single straight line,
     // connect the first two by a straight line
-    let direction = (cp2.x - cp1.x) * (cp0.y - cp1.y) + (cp2.y - cp1.y) * (cp1.x - cp0.x);
+    let direction = (cp2.x - cp1.x) * (cpy - cp1.y) + (cp2.y - cp1.y) * (cp1.x - cpx);
     if direction == 0.0 {
       self.line_to(&cp1);
       return;
     }
 
     // otherwise, draw the Arc
-    let a2 = (cp0.x - cp1.x).powi(2) + (cp0.y - cp1.y).powi(2);
+    let a2 = (cpx - cp1.x).powi(2) + (cpy - cp1.y).powi(2);
     let b2 = (cp1.x - cp2.x).powi(2) + (cp1.y - cp2.y).powi(2);
     let d = {
-      let c2 = (cp0.x - cp2.x).powi(2) + (cp0.y - cp2.y).powi(2);
+      let c2 = (cpx - cp2.x).powi(2) + (cpy - cp2.y).powi(2);
       let cosx = (a2 + b2 - c2) / (2.0 * (a2 * b2).sqrt());
       let sinx = (1.0 - cosx.powi(2)).sqrt();
       radius / ((1.0 - cosx) / sinx)
     };
 
     // first tangent point
-    let anx = (cp1.x - cp0.x) / a2.sqrt();
-    let any = (cp1.y - cp0.y) / a2.sqrt();
+    let anx = (cp1.x - cpx) / a2.sqrt();
+    let any = (cp1.y - cpy) / a2.sqrt();
     let tp1 = Point2D::new(cp1.x - anx * d, cp1.y - any * d);
 
     // second tangent point
@@ -635,7 +610,7 @@ impl <'a> Context2d<'a> {
     let angle_start = (tp1.y - cy).atan2(tp1.x - cx);
     let angle_end = (tp2.y - cy).atan2(tp2.x - cx);
 
-    self.line_to(&tp1);
+    self.line_to(&cp1);
     if [cx, cy, angle_start, angle_end].iter().all(|x| x.is_finite()) {
       self.arc(&Point2D::new(cx, cy), radius,
                 angle_start, angle_end, anticlockwise);
@@ -730,11 +705,11 @@ impl <'a> Context2d<'a> {
     }
   }
 
-  fn image_data(&self, dest_rect: Rect<i32>, canvas_size: Size2D<f64>, chan: Sender<Vec<u8>>) {
-    let mut dest_data = self.read_pixels(dest_rect, canvas_size);
+  fn image_data(&mut self, dest_rect: Rect<i32>, canvas_size: Size2D<f64>, chan: Sender<Vec<u8>>) {
+    let dest_data = self.read_pixels(dest_rect, canvas_size);
 
     // bgra -> rgba
-    byte_swap(&mut dest_data);
+    // byte_swap(&mut dest_data);
     chan.send(dest_data).expect("Send image_data fail");
   }
 
@@ -892,9 +867,9 @@ impl ToAzureStyle for Rect<f64> {
 }
 
 impl ToAzureStyle for CompositionOrBlending {
-  type Target = CompositionOp;
+  type Target = Operator;
 
-  fn to_azure_style(self) -> CompositionOp {
+  fn to_azure_style(self) -> Operator {
     match self {
       CompositionOrBlending::Composition(op) => op.to_azure_style(),
       CompositionOrBlending::Blending(op) => op.to_azure_style(),
@@ -959,69 +934,69 @@ impl ToAzurePattern for FillOrStrokeStyle {
 }
 
 impl ToAzureStyle for LineCapStyle {
-  type Target = CapStyle;
+  type Target = LineCap;
 
-  fn to_azure_style(self) -> CapStyle {
+  fn to_azure_style(self) -> LineCap {
     match self {
-      LineCapStyle::Butt => CapStyle::Butt,
-      LineCapStyle::Round => CapStyle::Round,
-      LineCapStyle::Square => CapStyle::Square,
+      LineCapStyle::Butt => LineCap::Butt,
+      LineCapStyle::Round => LineCap::Round,
+      LineCapStyle::Square => LineCap::Square,
     }
   }
 }
 
 impl ToAzureStyle for LineJoinStyle {
-  type Target = JoinStyle;
+  type Target = LineJoin;
 
-  fn to_azure_style(self) -> JoinStyle {
+  fn to_azure_style(self) -> LineJoin {
     match self {
-      LineJoinStyle::Round => JoinStyle::Round,
-      LineJoinStyle::Bevel => JoinStyle::Bevel,
-      LineJoinStyle::Miter => JoinStyle::Miter,
+      LineJoinStyle::Round => LineJoin::Round,
+      LineJoinStyle::Bevel => LineJoin::Bevel,
+      LineJoinStyle::Miter => LineJoin::Miter,
     }
   }
 }
 
 impl ToAzureStyle for CompositionStyle {
-  type Target = CompositionOp;
+  type Target = Operator;
 
-  fn to_azure_style(self) -> CompositionOp {
+  fn to_azure_style(self) -> Operator {
     match self {
-      CompositionStyle::SrcIn    => CompositionOp::In,
-      CompositionStyle::SrcOut   => CompositionOp::Out,
-      CompositionStyle::SrcOver  => CompositionOp::Over,
-      CompositionStyle::SrcAtop  => CompositionOp::Atop,
-      CompositionStyle::DestIn   => CompositionOp::DestIn,
-      CompositionStyle::DestOut  => CompositionOp::DestOut,
-      CompositionStyle::DestOver => CompositionOp::DestOver,
-      CompositionStyle::DestAtop => CompositionOp::DestAtop,
-      CompositionStyle::Copy     => CompositionOp::Source,
-      CompositionStyle::Lighter  => CompositionOp::Add,
-      CompositionStyle::Xor      => CompositionOp::Xor,
+      CompositionStyle::SrcIn    => Operator::In,
+      CompositionStyle::SrcOut   => Operator::Out,
+      CompositionStyle::SrcOver  => Operator::Over,
+      CompositionStyle::SrcAtop  => Operator::Atop,
+      CompositionStyle::DestIn   => Operator::DestIn,
+      CompositionStyle::DestOut  => Operator::DestOut,
+      CompositionStyle::DestOver => Operator::DestOver,
+      CompositionStyle::DestAtop => Operator::DestAtop,
+      CompositionStyle::Copy     => Operator::Source,
+      CompositionStyle::Lighter  => Operator::Add,
+      CompositionStyle::Xor      => Operator::Xor,
     }
   }
 }
 
 impl ToAzureStyle for BlendingStyle {
-  type Target = CompositionOp;
+  type Target = Operator;
 
-  fn to_azure_style(self) -> CompositionOp {
+  fn to_azure_style(self) -> Operator {
     match self {
-      BlendingStyle::Multiply   => CompositionOp::Multiply,
-      BlendingStyle::Screen     => CompositionOp::Screen,
-      BlendingStyle::Overlay    => CompositionOp::Overlay,
-      BlendingStyle::Darken     => CompositionOp::Darken,
-      BlendingStyle::Lighten    => CompositionOp::Lighten,
-      BlendingStyle::ColorDodge => CompositionOp::ColorDodge,
-      BlendingStyle::ColorBurn  => CompositionOp::ColorBurn,
-      BlendingStyle::HardLight  => CompositionOp::HardLight,
-      BlendingStyle::SoftLight  => CompositionOp::SoftLight,
-      BlendingStyle::Difference => CompositionOp::Difference,
-      BlendingStyle::Exclusion  => CompositionOp::Exclusion,
-      BlendingStyle::Hue        => CompositionOp::Hue,
-      BlendingStyle::Saturation => CompositionOp::Saturation,
-      BlendingStyle::Color      => CompositionOp::Color,
-      BlendingStyle::Luminosity => CompositionOp::Luminosity,
+      BlendingStyle::Multiply   => Operator::Multiply,
+      BlendingStyle::Screen     => Operator::Screen,
+      BlendingStyle::Overlay    => Operator::Overlay,
+      BlendingStyle::Darken     => Operator::Darken,
+      BlendingStyle::Lighten    => Operator::Lighten,
+      BlendingStyle::ColorDodge => Operator::ColorDodge,
+      BlendingStyle::ColorBurn  => Operator::ColorBurn,
+      BlendingStyle::HardLight  => Operator::HardLight,
+      BlendingStyle::SoftLight  => Operator::SoftLight,
+      BlendingStyle::Difference => Operator::Difference,
+      BlendingStyle::Exclusion  => Operator::Exclusion,
+      BlendingStyle::Hue        => Operator::HslHue,
+      BlendingStyle::Saturation => Operator::HslSaturation,
+      BlendingStyle::Color      => Operator::HslColor,
+      BlendingStyle::Luminosity => Operator::HslLuminosity,
     }
   }
 }

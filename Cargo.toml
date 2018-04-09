@@ -6,6 +6,7 @@ authors = ["LongYinan <lynweklm@gmail.com>"]
 [dependencies]
 app_units = "0.6"
 azure = "0.28"
+cairo-rs = { version = "0.4.1", features = ["png"] }
 cssparser = { version = "0.23", features = ["serde"] }
 euclid = { version = "0.17", features = ["serde"] }
 font-loader = "0.6"

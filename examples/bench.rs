@@ -30,7 +30,7 @@ fn main() {
       rrenderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::BezierCurveTo(Point2D::new(760.0, 300.0), Point2D::new(920.0, 425.0), Point2D::new(1100.0, 200.0)))).unwrap();
       rrenderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::Stroke)).unwrap();
       rrenderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetFillStyle(FillOrStrokeStyle::Color(RGBA::new(233, 193, 127, 255))))).unwrap();
-      rrenderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::Arc(Point2D::new(700.0, 600.0), 400.0, 0.0, 2.0 * PI as f32, false))).unwrap();
+      rrenderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::Arc(Point2D::new(700.0, 600.0), 400.0, 0.0, 2.0 * PI, false))).unwrap();
       rrenderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::Fill)).unwrap();
       rrenderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetFillStyle(FillOrStrokeStyle::Color(RGBA::new(0, 0, 0, 255))))).unwrap();
       rrenderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetFontStyle("200px \"PingFang TC\"".to_string()))).unwrap();

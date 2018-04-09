@@ -5,12 +5,11 @@ extern crate rustcanvas;
 
 use std::fs::File;
 use std::f64::consts::PI;
+use std::io::{Write};
 use std::sync::mpsc::{channel};
 
 use cssparser::{RGBA};
 use euclid::{Point2D, Size2D, Rect};
-use image::png::{PNGEncoder};
-use image::{ColorType};
 use rustcanvas::{create_canvas, CanvasContextType, FillOrStrokeStyle, CanvasMsg, Canvas2dMsg};
 
 fn main() {
@@ -27,7 +26,7 @@ fn main() {
   renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::BezierCurveTo(Point2D::new(760.0, 300.0), Point2D::new(920.0, 425.0), Point2D::new(1100.0, 200.0)))).unwrap();
   renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::Stroke)).unwrap();
   renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetFillStyle(FillOrStrokeStyle::Color(RGBA::new(233, 193, 127, 255))))).unwrap();
-  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::Arc(Point2D::new(700.0, 600.0), 400.0, 0.0, 2.0 * PI as f32, false))).unwrap();
+  renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::Arc(Point2D::new(700.0, 600.0), 400.0, 0.0, 2.0 * PI, false))).unwrap();
   renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::Fill)).unwrap();
   renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetFillStyle(FillOrStrokeStyle::Color(RGBA::new(0, 0, 0, 255))))).unwrap();
   renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetFontStyle("200px \"PingFang TC\"".to_string()))).unwrap();
@@ -49,10 +48,8 @@ fn main() {
 
   match receiver.recv() {
     Ok(pixels) => {
-      let f = File::create("./test.png").unwrap();
-      let png = PNGEncoder::new(f);
-      assert_eq!(pixels.len(), 1920 * 1080 * 4);
-      png.encode(&pixels, 1920, 1080, ColorType::RGBA(8)).expect("Write File Error");
+      let mut f = File::create("./test.png").unwrap();
+      f.write(&pixels).unwrap();
     },
     Err(e) => panic!("Recv fail: {:?}", e),
   };
