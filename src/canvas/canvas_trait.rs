@@ -1,8 +1,65 @@
+use std::fmt::{Debug, Error, Formatter};
 use std::str::FromStr;
 use std::sync::mpsc::{Sender};
 
 use cssparser::RGBA;
 use euclid::{Point2D, Rect, Size2D, Transform2D, Vector2D};
+use cairo::{Pattern, SolidPattern, LinearGradient, RadialGradient, SurfacePattern};
+use cairo::prelude::{Gradient};
+
+pub enum CairoPattern {
+  Color(RGBA),
+  SolidPattern(SolidPattern),
+  LinearGradient(LinearGradient),
+  RadialGradient(RadialGradient),
+  SurfacePattern(SurfacePattern),
+}
+
+impl Clone for CairoPattern {
+  fn clone(&self) -> CairoPattern {
+    match self {
+      CairoPattern::Color(c) => {
+        CairoPattern::Color(c.clone())
+      },
+      CairoPattern::SolidPattern(s) => {
+        CairoPattern::SolidPattern(s.reference())
+      },
+      CairoPattern::LinearGradient(l) => {
+        CairoPattern::LinearGradient(l.reference())
+      },
+      CairoPattern::RadialGradient(r) => {
+        CairoPattern::RadialGradient(r.reference())
+      },
+      CairoPattern::SurfacePattern(s) => {
+        CairoPattern::SurfacePattern(s.reference())
+      }
+    }
+  }
+}
+
+impl Debug for CairoPattern {
+  fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    match self {
+      CairoPattern::Color(c) => {
+        write!(
+          f, "CairoPattern::Color({:?})", c,
+        )
+      },
+      CairoPattern::LinearGradient(linear) => {
+        write!(f, "CairoPattern::LinearGradient{:?}", linear.get_linear_points())
+      },
+      CairoPattern::RadialGradient(radial) => {
+        write!(f, "CairoPattern::RadialGradient{:?}", radial.get_radial_circles())
+      },
+      CairoPattern::SolidPattern(solid) => {
+        write!(f, "CairoPattern::SolidPattern(RGBA{:?})", solid.get_rgba())
+      },
+      CairoPattern::SurfacePattern(surface) => {
+        write!(f, "CairoPattern::SurfacePattern({:?})", surface.get_surface())
+      },
+    }
+  }
+}
 
 #[derive(Clone)]
 pub enum CanvasMsg {
@@ -24,13 +81,13 @@ pub enum Canvas2dMsg {
   DrawImageSelf(Size2D<f64>, Rect<f64>, Rect<f64>, bool),
   BeginPath,
   BezierCurveTo(Point2D<f64>, Point2D<f64>, Point2D<f64>),
-  ClearRect(Rect<f32>),
+  ClearRect(Rect<f64>),
   Clip,
   ClosePath,
   Ellipse(Point2D<f32>, f32, f32, f32, f32, f32, bool),
   Fill,
   FillText(String, f32, f32, Option<f32>),
-  FillRect(Rect<f32>),
+  FillRect(Rect<f64>),
   GetImageData(Rect<i32>, Size2D<f64>, Sender<Vec<u8>>),
   IsPointInPath(f64, f64, FillRule, Sender<bool>),
   LineTo(Point2D<f64>),
@@ -40,7 +97,7 @@ pub enum Canvas2dMsg {
   Rect(Rect<f32>),
   RestoreContext,
   SaveContext,
-  StrokeRect(Rect<f32>),
+  StrokeRect(Rect<f64>),
   Stroke,
   StrokeText(String, f32, f32, Option<f32>),
   SetFillStyle(FillOrStrokeStyle),
@@ -52,7 +109,7 @@ pub enum Canvas2dMsg {
   SetMiterLimit(f64),
   SetGlobalAlpha(f32),
   SetGlobalComposition(CompositionOrBlending),
-  SetTransform(Transform2D<f32>),
+  SetTransform(Transform2D<f64>),
   SetShadowOffsetX(f64),
   SetShadowOffsetY(f64),
   SetShadowBlur(f64),

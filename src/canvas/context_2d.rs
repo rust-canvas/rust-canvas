@@ -2,19 +2,20 @@ use std::cell::{RefCell};
 use std::collections::{BTreeMap};
 use std::collections::btree_map::{Entry};
 use std::mem;
+use std::ops::{Deref};
 use std::sync::{Arc};
 use std::sync::atomic::{ATOMIC_USIZE_INIT, AtomicUsize, Ordering};
 use std::sync::mpsc::{Sender, channel};
 use std::thread;
 
 use app_units::Au;
-use azure::azure_hl::GradientStop;
-use azure::azure_hl::{Pattern, BackendType, DrawTarget, SurfaceFormat, DrawSurfaceOptions};
-use azure::azure_hl::{AntialiasMode, CompositionOp, Color, DrawOptions, Filter, ColorPattern};
-use azure::azure_hl::{LinearGradientPattern, ExtendMode, RadialGradientPattern, SurfacePattern};
+use azure::azure_hl::{BackendType, DrawTarget, SurfaceFormat};
+use azure::azure_hl::{CompositionOp, Color, Filter};
 use azure::azure_hl::{PathBuilder};
 use azure::{AzFloat};
-use cairo::{Context, Format, LineCap, LineJoin, ImageSurface, Operator};
+use cairo::{Context, Format, LineCap, LineJoin, Matrix, ImageSurface, Operator};
+use cairo::{Gradient, LinearGradient, RadialGradient, SurfacePattern};
+use cairo::prelude::{Pattern};
 use euclid::{Rect, Point2D, Vector2D, Transform2D, Size2D};
 use fonts::system_fonts;
 use lyon_path::{PathEvent};
@@ -273,20 +274,20 @@ impl <'a> Context2d<'a> {
     });
   }
 
-  fn fill_rect(&self, rect: &Rect<f32>) {
+  fn fill_rect(&self, rect: &Rect<f64>) {
     if is_zero_size_gradient(&self.state.fill_style) {
       return; // Paint nothing if gradient size is zero.
     }
 
     let draw_rect = Rect::new(rect.origin,
       match self.state.fill_style {
-        Pattern::Surface(ref surface) => {
+        CairoPattern::SurfacePattern(ref surface) => {
           let surface_size = surface.size();
           match (surface.repeat_x, surface.repeat_y) {
             (true, true) => rect.size,
-            (true, false) => Size2D::new(rect.size.width, surface_size.height as f32),
-            (false, true) => Size2D::new(surface_size.width as f32, rect.size.height),
-            (false, false) => Size2D::new(surface_size.width as f32, surface_size.height as f32),
+            (true, false) => Size2D::new(rect.size.width, surface_size.height as f64),
+            (false, true) => Size2D::new(surface_size.width as f64, rect.size.height),
+            (false, false) => Size2D::new(surface_size.width as f64, surface_size.height as f64),
           }
         },
         _ => rect.size,
@@ -294,36 +295,36 @@ impl <'a> Context2d<'a> {
     );
 
     if self.need_to_draw_shadow() {
-      self.draw_with_shadow(&draw_rect, |new_draw_target: &DrawTarget| {
-        new_draw_target.fill_rect(&draw_rect, self.state.fill_style.to_pattern_ref(),
-                                  Some(&self.state.draw_options));
+      self.draw_with_shadow(&draw_rect, |new_cairo_ctx: &Context| {
+        new_cairo_ctx.rectangle(draw_rect.origin.x, draw_rect.origin.y, draw_rect.size.width, draw_rect.size.height);
       });
     } else {
-      self.drawtarget.fill_rect(&draw_rect, self.state.fill_style.to_pattern_ref(),
-                                Some(&self.state.draw_options));
+      self.cairo_ctx.rectangle(draw_rect.origin.x, draw_rect.origin.y, draw_rect.size.width, draw_rect.size.height);
     }
+    self.cairo_ctx.fill();
   }
 
-  fn clear_rect(&self, rect: &Rect<f32>) {
-    self.drawtarget.clear_rect(rect);
+  fn clear_rect(&self, rect: &Rect<f64>) {
+    let operator = self.cairo_ctx.get_operator();
+    self.cairo_ctx.set_operator(Operator::Clear);
+    self.cairo_ctx.rectangle(rect.origin.x, rect.origin.y, rect.size.width, rect.size.height);
+    self.cairo_ctx.fill();
+    self.cairo_ctx.set_operator(operator);
   }
 
-  fn stroke_rect(&self, rect: &Rect<f32>) {
+  fn stroke_rect(&self, rect: &Rect<f64>) {
     if is_zero_size_gradient(&self.state.stroke_style) {
       return; // Paint nothing if gradient size is zero.
     }
 
     if self.need_to_draw_shadow() {
-      self.draw_with_shadow(&rect, |new_draw_target: &DrawTarget| {
-        new_draw_target.stroke_rect(rect, self.state.stroke_style.to_pattern_ref(),
-                                    &self.state.stroke_opts, &self.state.draw_options);
+      self.draw_with_shadow(&rect, |new_cairo_ctx: &Context| {
+        new_cairo_ctx.rectangle(rect.origin.x, rect.origin.y, rect.size.width, rect.size.height);
       });
-    } else if rect.size.width == 0. || rect.size.height == 0. {
-      self.cairo_ctx.stroke();
-    } else {
-      self.drawtarget.stroke_rect(rect, self.state.stroke_style.to_pattern_ref(),
-                                  &self.state.stroke_opts, &self.state.draw_options);
+    } else if rect.size.width == 0. || rect.size.height == 0. { } else {
+      self.cairo_ctx.rectangle(rect.origin.x, rect.origin.y, rect.size.width, rect.size.height);
     }
+    self.cairo_ctx.stroke();
   }
 
   fn begin_path(&self) {
@@ -368,30 +369,28 @@ impl <'a> Context2d<'a> {
     let image_data = crop_image(image_data, image_size, source_rect);
 
     if self.need_to_draw_shadow() {
-      let rect = Rect::new(Point2D::new(dest_rect.origin.x as f32, dest_rect.origin.y as f32),
-                            Size2D::new(dest_rect.size.width as f32, dest_rect.size.height as f32));
+      let rect = Rect::new(Point2D::new(dest_rect.origin.x, dest_rect.origin.y),
+                            Size2D::new(dest_rect.size.width, dest_rect.size.height));
 
-      self.draw_with_shadow(&rect, |new_draw_target: &DrawTarget| {
-        write_image(&new_draw_target, image_data, source_rect.size, dest_rect,
+      self.draw_with_shadow(&rect, |new_cairo_ctx: &Context| {
+        write_image(&new_cairo_ctx, image_data, source_rect.size, dest_rect,
                     smoothing_enabled, self.state.draw_options.composition,
                     self.state.draw_options.alpha);
       });
     } else {
-      write_image(&self.drawtarget, image_data, source_rect.size, dest_rect,
+      write_image(&self.cairo_ctx, image_data, source_rect.size, dest_rect,
                   smoothing_enabled, self.state.draw_options.composition,
                   self.state.draw_options.alpha);
     }
   }
 
-  fn create_draw_target_for_shadow(&self, source_rect: &Rect<f32>) -> DrawTarget {
-    let draw_target = self.drawtarget.create_similar_draw_target(&Size2D::new(source_rect.size.width as i32,
-                                                                              source_rect.size.height as i32),
-                                                                  self.drawtarget.get_format());
+  fn create_draw_target_for_shadow(&self, source_rect: &Rect<f64>) -> Context {
+    let cairo_ctx = self.cairo_ctx.clone();
     let matrix = Transform2D::identity()
       .pre_translate(-source_rect.origin.to_vector().cast().unwrap())
       .pre_mul(&self.state.transform);
-    draw_target.set_transform(&matrix);
-    draw_target
+    cairo_ctx.transform(matrix.to_azure_style());
+    cairo_ctx
   }
 
   fn ellipse(&mut self,
@@ -439,9 +438,9 @@ impl <'a> Context2d<'a> {
     self.cairo_ctx.set_miter_limit(limit);
   }
 
-  fn set_transform(&mut self, transform: &Transform2D<f32>) {
+  fn set_transform(&mut self, transform: &Transform2D<f64>) {
     self.state.transform = transform.clone();
-    self.drawtarget.set_transform(transform)
+    self.cairo_ctx.transform(transform.to_azure_style());
   }
 
   fn set_global_alpha(&mut self, alpha: f32) {
@@ -476,20 +475,17 @@ impl <'a> Context2d<'a> {
       self.state.shadow_blur != 0.0f64)
   }
 
-  fn draw_with_shadow<F>(&self, rect: &Rect<f32>, draw_shadow_source: F)
-      where F: FnOnce(&DrawTarget)
+  fn draw_with_shadow<F>(&self, rect: &Rect<f64>, draw_shadow_source: F)
+      where F: FnOnce(&Context)
   {
     let shadow_src_rect = self.state.transform.transform_rect(rect);
-    let new_draw_target = self.create_draw_target_for_shadow(&shadow_src_rect);
-    draw_shadow_source(&new_draw_target);
-    self.drawtarget.draw_surface_with_shadow(new_draw_target.snapshot(),
-                                            &Point2D::new(shadow_src_rect.origin.x as AzFloat,
-                                                          shadow_src_rect.origin.y as AzFloat),
-                                            &self.state.shadow_color,
-                                            &Vector2D::new(self.state.shadow_offset_x as AzFloat,
-                                                          self.state.shadow_offset_y as AzFloat),
-                                            (self.state.shadow_blur / 2.0f64) as AzFloat,
-                                            self.state.draw_options.composition);
+    let new_cario_ctx = self.create_draw_target_for_shadow(&shadow_src_rect);
+    draw_shadow_source(&new_cario_ctx);
+    let new_surface = SurfacePattern::create(&new_cario_ctx.get_target());
+    let old_pattern = self.cairo_ctx.get_source();
+    self.cairo_ctx.set_source(&new_surface);
+    self.cairo_ctx.paint();
+    self.cairo_ctx.set_source(old_pattern.deref());
   }
 
   fn draw_image_self(&mut self, image_size: Size2D<f64>,
@@ -500,17 +496,17 @@ impl <'a> Context2d<'a> {
     let image_data = self.read_pixels(source_rect.to_i32(), image_size);
 
     if self.need_to_draw_shadow() {
-      let rect = Rect::new(Point2D::new(dest_rect.origin.x as f32, dest_rect.origin.y as f32),
-                            Size2D::new(dest_rect.size.width as f32, dest_rect.size.height as f32));
+      let rect = Rect::new(Point2D::new(dest_rect.origin.x, dest_rect.origin.y),
+                            Size2D::new(dest_rect.size.width, dest_rect.size.height));
 
-      self.draw_with_shadow(&rect, |new_draw_target: &DrawTarget| {
-        write_image(&new_draw_target, image_data, source_rect.size, dest_rect,
+      self.draw_with_shadow(&rect, |new_cario_ctx: &Context| {
+        write_image(&new_cario_ctx, image_data, source_rect.size, dest_rect,
                     smoothing_enabled, self.state.draw_options.composition,
                     self.state.draw_options.alpha);
       });
     } else {
       // Writes on target canvas
-      write_image(&self.drawtarget, image_data, image_size, dest_rect,
+      write_image(&self.cairo_ctx, image_data, image_size, dest_rect,
                   smoothing_enabled, self.state.draw_options.composition,
                   self.state.draw_options.alpha);
     }
@@ -722,13 +718,14 @@ impl <'a> Context2d<'a> {
   }
 }
 
-fn is_zero_size_gradient(pattern: &Pattern) -> bool {
-  if let &Pattern::LinearGradient(ref gradient) = pattern {
-    if gradient.is_zero_size() {
-      return true;
-    }
+fn is_zero_size_gradient(pattern: &CairoPattern) -> bool {
+  match pattern {
+    CairoPattern::LinearGradient(linear) => {
+      let (x1, y1, x2, y2) = linear.get_linear_points();
+      return x1 == x2 && y1 == y2
+    },
+    _ => false,
   }
-  false
 }
 
 pub trait PointToi32 {
@@ -812,7 +809,7 @@ fn crop_image(image_data: Vec<u8>,
 /// image_size: The size of the image to be written
 /// dest_rect: Area of the destination target where the pixels will be copied
 /// smoothing_enabled: It determines if smoothing is applied to the image result
-fn write_image(draw_target: &DrawTarget,
+fn write_image(cairo_ctx: &Context,
               mut image_data: Vec<u8>,
               image_size: Size2D<f64>,
               dest_rect: Rect<f64>,
@@ -838,20 +835,13 @@ fn write_image(draw_target: &DrawTarget,
   // azure_hl operates with integers. We need to cast the image size
   let image_size = image_size.to_i32();
 
-  if let Some(source_surface) =
-    draw_target.create_source_surface_from_data(&mut image_data,
-                                                image_size,
-                                                image_size.width * 4,
-                                                SurfaceFormat::B8G8R8A8) {
-    let draw_surface_options = DrawSurfaceOptions::new(filter, true);
-    let draw_options = DrawOptions::new(global_alpha, composition_op, AntialiasMode::Subpixel);
+  let surface = cairo_ctx.get_target();
+  if let Ok(source_surface) =
+    ImageSurface::create_for_data(Box::from(image_data.as_slice()), |d| {
+      drop(d);
+    }, Format::ARgb32, image_size.width, image_size.height, image_size.width * 4) {
 
-    draw_target.draw_surface(source_surface,
-                              dest_rect.to_azure_style(),
-                              image_rect.to_azure_style(),
-                              draw_surface_options,
-                              draw_options);
-  }
+    }
 }
 
 pub trait ToAzureStyle {
@@ -880,56 +870,66 @@ impl ToAzureStyle for CompositionOrBlending {
 }
 
 pub trait ToAzurePattern {
-  fn to_azure_pattern(&self, drawtarget: &DrawTarget) -> Option<Pattern>;
+  fn to_azure_pattern(&self, context: &Context) -> Option<CairoPattern>;
 }
 
 impl ToAzurePattern for FillOrStrokeStyle {
-  fn to_azure_pattern(&self, drawtarget: &DrawTarget) -> Option<Pattern> {
+  fn to_azure_pattern(&self, context: &Context) -> Option<CairoPattern> {
     match *self {
-      FillOrStrokeStyle::Color(ref color) => {
-        Some(Pattern::Color(ColorPattern::new(color.to_azure_style())))
+      FillOrStrokeStyle::Color(color) => {
+        Some(CairoPattern::Color(color))
       },
       FillOrStrokeStyle::LinearGradient(ref linear_gradient_style) => {
-        let gradient_stops: Vec<GradientStop> = linear_gradient_style.stops.iter().map(|s| {
-          GradientStop {
-            offset: s.offset as AzFloat,
-            color: s.color.to_azure_style()
-          }
-        }).collect();
+        let gradient = LinearGradient::new(
+          linear_gradient_style.x0,
+          linear_gradient_style.y0,
+          linear_gradient_style.x1,
+          linear_gradient_style.y1,
+        );
+        linear_gradient_style.stops.iter().for_each(|s| {
+          gradient.add_color_stop_rgba(
+            s.offset,
+            s.color.red_f32() as f64,
+            s.color.green_f32() as f64,
+            s.color.blue_f32() as f64,
+            s.color.alpha_f32() as f64,
+          );
+        });
 
-        Some(Pattern::LinearGradient(LinearGradientPattern::new(
-            &Point2D::new(linear_gradient_style.x0 as AzFloat, linear_gradient_style.y0 as AzFloat),
-            &Point2D::new(linear_gradient_style.x1 as AzFloat, linear_gradient_style.y1 as AzFloat),
-            drawtarget.create_gradient_stops(&gradient_stops, ExtendMode::Clamp),
-            &Transform2D::identity())))
+        Some(CairoPattern::LinearGradient(gradient))
       },
       FillOrStrokeStyle::RadialGradient(ref radial_gradient_style) => {
-        let gradient_stops: Vec<GradientStop> = radial_gradient_style.stops.iter().map(|s| {
-          GradientStop {
-            offset: s.offset as AzFloat,
-            color: s.color.to_azure_style()
-          }
-        }).collect();
+        let gradient = RadialGradient::new(
+          radial_gradient_style.x0,
+          radial_gradient_style.y0,
+          radial_gradient_style.r0,
+          radial_gradient_style.x1,
+          radial_gradient_style.y1,
+          radial_gradient_style.r1,
+        );
+        radial_gradient_style.stops.iter().for_each(|s| {
+          gradient.add_color_stop_rgba(
+            s.offset,
+            s.color.red_f32() as f64,
+            s.color.green_f32() as f64,
+            s.color.blue_f32() as f64,
+            s.color.alpha_f32() as f64,
+          );
+        });
 
-        Some(Pattern::RadialGradient(RadialGradientPattern::new(
-          &Point2D::new(radial_gradient_style.x0 as AzFloat, radial_gradient_style.y0 as AzFloat),
-          &Point2D::new(radial_gradient_style.x1 as AzFloat, radial_gradient_style.y1 as AzFloat),
-          radial_gradient_style.r0 as AzFloat, radial_gradient_style.r1 as AzFloat,
-          drawtarget.create_gradient_stops(&gradient_stops, ExtendMode::Clamp),
-          &Transform2D::identity())))
+        Some(CairoPattern::RadialGradient(gradient))
       },
       FillOrStrokeStyle::Surface(ref surface_style) => {
-        drawtarget.create_source_surface_from_data(&surface_style.surface_data,
-                                                    surface_style.surface_size,
-                                                    surface_style.surface_size.width * 4,
-                                                    SurfaceFormat::B8G8R8A8)
-                  .map(|source_surface| {
-            Pattern::Surface(SurfacePattern::new(
-              source_surface.azure_source_surface,
-              surface_style.repeat_x,
-              surface_style.repeat_y,
-              &Transform2D::identity()))
-            })
+        let image_surface = ImageSurface::create_for_data(
+          Box::from(surface_style.surface_data.as_slice()), |d| {
+            drop(d);
+          },
+          Format::ARgb32,
+          surface_style.surface_size.width,
+          surface_style.surface_size.height,
+          surface_style.surface_size.width * 4,
+        ).expect("Create image surface pattern fail");
+        Some(CairoPattern::SurfacePattern(SurfacePattern::create(&image_surface)))
       }
     }
   }
@@ -999,6 +999,21 @@ impl ToAzureStyle for BlendingStyle {
       BlendingStyle::Saturation => Operator::HslSaturation,
       BlendingStyle::Color      => Operator::HslColor,
       BlendingStyle::Luminosity => Operator::HslLuminosity,
+    }
+  }
+}
+
+impl ToAzureStyle for Transform2D<f64> {
+  type Target = Matrix;
+
+  fn to_azure_style(self) -> Matrix {
+    Matrix {
+      xx: self.m11,
+      xy: self.m12,
+      yx: self.m21,
+      yy: self.m22,
+      x0: self.m31,
+      y0: self.m32,
     }
   }
 }

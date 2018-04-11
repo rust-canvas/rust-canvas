@@ -7,16 +7,17 @@ use azure::{AzFloat};
 use euclid::{Transform2D};
 use cssparser::{RGBA};
 use super::context_2d::{ToAzureStyle};
+use super::canvas_trait::{CairoPattern};
 pub use self::font::*;
 
 #[derive(Debug, Clone)]
 pub struct PaintState<'a> {
   pub draw_options: DrawOptions,
-  pub fill_style: Pattern,
-  pub stroke_style: Pattern,
+  pub fill_style: CairoPattern,
+  pub stroke_style: CairoPattern,
   pub stroke_opts: StrokeOptions<'a>,
   pub font: Font,
-  pub transform: Transform2D<f32>,
+  pub transform: Transform2D<f64>,
   pub shadow_offset_x: f64,
   pub shadow_offset_y: f64,
   pub shadow_blur: f64,
@@ -25,7 +26,7 @@ pub struct PaintState<'a> {
 
 impl <'a> Default for PaintState<'a> {
   fn default() -> Self {
-    let fill_style = Pattern::Color(ColorPattern::new(RGBA::new(0, 0, 0, 1).to_azure_style()));
+    let fill_style = CairoPattern::Color(RGBA::new(0, 0, 0, 1));
     let stroke_style = fill_style.clone();
     PaintState {
       draw_options: DrawOptions::new(1.0, CompositionOp::Over, AntialiasMode::Default),
