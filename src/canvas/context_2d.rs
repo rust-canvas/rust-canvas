@@ -10,13 +10,12 @@ use std::thread;
 
 use app_units::Au;
 use azure::azure_hl::{BackendType, DrawTarget, SurfaceFormat};
-use azure::azure_hl::{CompositionOp, Color, Filter};
+use azure::azure_hl::{CompositionOp, Color};
 use azure::azure_hl::{PathBuilder};
 use azure::{AzFloat};
 use cairo::{Context, Format, LineCap, LineJoin, Matrix, ImageSurface, Operator};
-use cairo::{Gradient, LinearGradient, RadialGradient, SurfacePattern};
-use cairo::prelude::{Pattern};
-use euclid::{Rect, Point2D, Vector2D, Transform2D, Size2D};
+use cairo::{Pattern, Gradient, Filter, LinearGradient, RadialGradient, SurfacePattern};
+use euclid::{Rect, Point2D, Vector2D, Transform2D, Size2D, TypedTransform2D, UnknownUnit};
 use fonts::system_fonts;
 use lyon_path::{PathEvent};
 use num_traits::ToPrimitive;
@@ -281,14 +280,8 @@ impl <'a> Context2d<'a> {
 
     let draw_rect = Rect::new(rect.origin,
       match self.state.fill_style {
-        CairoPattern::SurfacePattern(ref surface) => {
-          let surface_size = surface.size();
-          match (surface.repeat_x, surface.repeat_y) {
-            (true, true) => rect.size,
-            (true, false) => Size2D::new(rect.size.width, surface_size.height as f64),
-            (false, true) => Size2D::new(surface_size.width as f64, rect.size.height),
-            (false, false) => Size2D::new(surface_size.width as f64, surface_size.height as f64),
-          }
+        CairoPattern::SurfacePattern(ref _surface) => {
+          unimplemented!();
         },
         _ => rect.size,
       }
@@ -374,13 +367,11 @@ impl <'a> Context2d<'a> {
 
       self.draw_with_shadow(&rect, |new_cairo_ctx: &Context| {
         write_image(&new_cairo_ctx, image_data, source_rect.size, dest_rect,
-                    smoothing_enabled, self.state.draw_options.composition,
-                    self.state.draw_options.alpha);
+                    smoothing_enabled);
       });
     } else {
       write_image(&self.cairo_ctx, image_data, source_rect.size, dest_rect,
-                  smoothing_enabled, self.state.draw_options.composition,
-                  self.state.draw_options.alpha);
+                  smoothing_enabled);
     }
   }
 
@@ -501,14 +492,12 @@ impl <'a> Context2d<'a> {
 
       self.draw_with_shadow(&rect, |new_cario_ctx: &Context| {
         write_image(&new_cario_ctx, image_data, source_rect.size, dest_rect,
-                    smoothing_enabled, self.state.draw_options.composition,
-                    self.state.draw_options.alpha);
+                    smoothing_enabled);
       });
     } else {
       // Writes on target canvas
       write_image(&self.cairo_ctx, image_data, image_size, dest_rect,
-                  smoothing_enabled, self.state.draw_options.composition,
-                  self.state.draw_options.alpha);
+                  smoothing_enabled);
     }
   }
 
@@ -813,9 +802,7 @@ fn write_image(cairo_ctx: &Context,
               mut image_data: Vec<u8>,
               image_size: Size2D<f64>,
               dest_rect: Rect<f64>,
-              smoothing_enabled: bool,
-              composition_op: CompositionOp,
-              global_alpha: f32) {
+              smoothing_enabled: bool) {
   if image_data.is_empty() {
     return
   }
@@ -828,9 +815,9 @@ fn write_image(cairo_ctx: &Context,
   // to apply a smoothing algorithm to the image data when it is scaled.
   // Otherwise, the image must be rendered using nearest-neighbor interpolation.
   let filter = if smoothing_enabled {
-    Filter::Linear
+    Filter::Best
   } else {
-    Filter::Point
+    Filter::Fast
   };
   // azure_hl operates with integers. We need to cast the image size
   let image_size = image_size.to_i32();
@@ -840,7 +827,13 @@ fn write_image(cairo_ctx: &Context,
     ImageSurface::create_for_data(Box::from(image_data.as_slice()), |d| {
       drop(d);
     }, Format::ARgb32, image_size.width, image_size.height, image_size.width * 4) {
-
+      let pattern = SurfacePattern::create(&source_surface);
+      pattern.set_filter(filter);
+      let scale_x = dest_rect.size.width / image_size.width as f64;
+      let scale_y = dest_rect.size.height / image_size.height as f64;
+      pattern.set_matrix(
+        TypedTransform2D::<f64, UnknownUnit, UnknownUnit>::create_scale(scale_x, scale_y).to_untyped().to_azure_style()
+      );
     }
 }
 
@@ -870,11 +863,11 @@ impl ToAzureStyle for CompositionOrBlending {
 }
 
 pub trait ToAzurePattern {
-  fn to_azure_pattern(&self, context: &Context) -> Option<CairoPattern>;
+  fn to_azure_pattern(&self) -> Option<CairoPattern>;
 }
 
 impl ToAzurePattern for FillOrStrokeStyle {
-  fn to_azure_pattern(&self, context: &Context) -> Option<CairoPattern> {
+  fn to_azure_pattern(&self) -> Option<CairoPattern> {
     match *self {
       FillOrStrokeStyle::Color(color) => {
         Some(CairoPattern::Color(color))

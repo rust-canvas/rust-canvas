@@ -1,7 +1,7 @@
 mod font;
 
 use std::default::Default;
-use azure::azure_hl::{Pattern, ColorPattern, Color, StrokeOptions, JoinStyle, CapStyle, DrawOptions};
+use azure::azure_hl::{Color, StrokeOptions, JoinStyle, CapStyle, DrawOptions};
 use azure::azure_hl::{AntialiasMode, CompositionOp};
 use azure::{AzFloat};
 use euclid::{Transform2D};

@@ -13,7 +13,7 @@ font-loader = "0.6"
 gleam = "0.4"
 lyon_path = "0.10"
 num-traits = "0.1"
-pathfinder_font_renderer = { git = "https://github.com/rust-canvas/pathfinder", branch = "rust-canvas", features = ["freetype-backend"] }
+pathfinder_font_renderer = { version = "0.3", git = "https://github.com/rust-canvas/pathfinder", branch = "rust-canvas", features = ["freetype-backend"] }
 serde = "1.0"
 serde_derive = "1.0"
 glutin = "0.13"

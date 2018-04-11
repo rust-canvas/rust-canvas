@@ -4,8 +4,7 @@ use std::sync::mpsc::{Sender};
 
 use cssparser::RGBA;
 use euclid::{Point2D, Rect, Size2D, Transform2D, Vector2D};
-use cairo::{Pattern, SolidPattern, LinearGradient, RadialGradient, SurfacePattern};
-use cairo::prelude::{Gradient};
+use cairo::{SolidPattern, LinearGradient, RadialGradient, SurfacePattern};
 
 pub enum CairoPattern {
   Color(RGBA),
