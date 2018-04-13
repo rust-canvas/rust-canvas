@@ -1,62 +1,45 @@
 mod font;
 
 use std::default::Default;
-use azure::azure_hl::{Color, StrokeOptions, JoinStyle, CapStyle, DrawOptions};
-use azure::azure_hl::{AntialiasMode, CompositionOp};
-use azure::{AzFloat};
 use euclid::{Transform2D};
 use cssparser::{RGBA};
-use super::context_2d::{ToAzureStyle};
 use super::canvas_trait::{CairoPattern};
 pub use self::font::*;
 
 #[derive(Debug, Clone)]
-pub struct PaintState<'a> {
-  pub draw_options: DrawOptions,
+pub struct PaintState {
   pub fill_style: CairoPattern,
   pub stroke_style: CairoPattern,
-  pub stroke_opts: StrokeOptions<'a>,
   pub font: Font,
+  pub global_alpha: f64,
   pub transform: Transform2D<f64>,
   pub shadow_offset_x: f64,
   pub shadow_offset_y: f64,
   pub shadow_blur: f64,
-  pub shadow_color: Color,
+  pub shadow_color: RGBA,
 }
 
-impl <'a> Default for PaintState<'a> {
+impl Default for PaintState {
   fn default() -> Self {
     let fill_style = CairoPattern::Color(RGBA::new(0, 0, 0, 1));
     let stroke_style = fill_style.clone();
     PaintState {
-      draw_options: DrawOptions::new(1.0, CompositionOp::Over, AntialiasMode::Default),
       fill_style,
       stroke_style,
-      stroke_opts: StrokeOptions::new(1.0, JoinStyle::MiterOrBevel, CapStyle::Butt, 10.0, &[]),
       font: Font::new("10px sans-serif"),
       transform: Transform2D::identity(),
+      global_alpha: 1.0f64,
       shadow_offset_x: 0.0,
       shadow_offset_y: 0.0,
       shadow_blur: 0.0,
-      shadow_color: Color::transparent(),
+      shadow_color: RGBA { red: 0, green: 0, blue: 0, alpha: 0 },
     }
   }
 }
 
-impl <'a> PaintState <'a> {
-  pub fn new() -> PaintState<'a> {
+impl PaintState {
+  pub fn new() -> PaintState {
     PaintState::default()
-  }
-}
-
-impl ToAzureStyle for RGBA {
-  type Target = Color;
-
-  fn to_azure_style(self) -> Color {
-    Color::rgba(self.red_f32() as AzFloat,
-                self.green_f32() as AzFloat,
-                self.blue_f32() as AzFloat,
-                self.alpha_f32() as AzFloat)
   }
 }
 
@@ -65,8 +48,6 @@ mod paint_state_test {
   use super::*;
   use std::mem;
   use cssparser::{RGBA};
-  use azure::azure_hl::{Pattern, Color};
-  use azure::{AzColorPatternRef};
 
   struct TestColorPattern {
     pub color: Color,

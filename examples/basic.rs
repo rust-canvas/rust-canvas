@@ -1,6 +1,5 @@
 extern crate cssparser;
 extern crate euclid;
-extern crate image;
 extern crate rustcanvas;
 
 use std::fs::File;

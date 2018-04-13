@@ -4,7 +4,7 @@ use std::sync::mpsc::{Sender};
 
 use cssparser::RGBA;
 use euclid::{Point2D, Rect, Size2D, Transform2D, Vector2D};
-use cairo::{SolidPattern, LinearGradient, RadialGradient, SurfacePattern};
+use cairo::{PatternTrait, SolidPattern, LinearGradient, RadialGradient, SurfacePattern};
 
 pub enum CairoPattern {
   Color(RGBA),
@@ -16,20 +16,20 @@ pub enum CairoPattern {
 
 impl Clone for CairoPattern {
   fn clone(&self) -> CairoPattern {
-    match self {
-      CairoPattern::Color(c) => {
+    match *self {
+      CairoPattern::Color(ref c) => {
         CairoPattern::Color(c.clone())
       },
-      CairoPattern::SolidPattern(s) => {
+      CairoPattern::SolidPattern(ref s) => {
         CairoPattern::SolidPattern(s.reference())
       },
-      CairoPattern::LinearGradient(l) => {
+      CairoPattern::LinearGradient(ref l) => {
         CairoPattern::LinearGradient(l.reference())
       },
-      CairoPattern::RadialGradient(r) => {
+      CairoPattern::RadialGradient(ref r) => {
         CairoPattern::RadialGradient(r.reference())
       },
-      CairoPattern::SurfacePattern(s) => {
+      CairoPattern::SurfacePattern(ref s) => {
         CairoPattern::SurfacePattern(s.reference())
       }
     }
@@ -38,22 +38,22 @@ impl Clone for CairoPattern {
 
 impl Debug for CairoPattern {
   fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-    match self {
-      CairoPattern::Color(c) => {
+    match *self {
+      CairoPattern::Color(ref c) => {
         write!(
           f, "CairoPattern::Color({:?})", c,
         )
       },
-      CairoPattern::LinearGradient(linear) => {
+      CairoPattern::LinearGradient(ref linear) => {
         write!(f, "CairoPattern::LinearGradient{:?}", linear.get_linear_points())
       },
-      CairoPattern::RadialGradient(radial) => {
+      CairoPattern::RadialGradient(ref radial) => {
         write!(f, "CairoPattern::RadialGradient{:?}", radial.get_radial_circles())
       },
-      CairoPattern::SolidPattern(solid) => {
+      CairoPattern::SolidPattern(ref solid) => {
         write!(f, "CairoPattern::SolidPattern(RGBA{:?})", solid.get_rgba())
       },
-      CairoPattern::SurfacePattern(surface) => {
+      CairoPattern::SurfacePattern(ref surface) => {
         write!(f, "CairoPattern::SurfacePattern({:?})", surface.get_surface())
       },
     }
@@ -83,7 +83,7 @@ pub enum Canvas2dMsg {
   ClearRect(Rect<f64>),
   Clip,
   ClosePath,
-  Ellipse(Point2D<f32>, f32, f32, f32, f32, f32, bool),
+  Ellipse(Point2D<f64>, f64, f64, f64, f64, f64, bool),
   Fill,
   FillText(String, f32, f32, Option<f32>),
   FillRect(Rect<f64>),
@@ -93,7 +93,7 @@ pub enum Canvas2dMsg {
   MoveTo(Point2D<f64>),
   PutImageData(Vec<u8>, Vector2D<f64>, Size2D<f64>, Rect<f64>),
   QuadraticCurveTo(Point2D<f64>, Point2D<f64>),
-  Rect(Rect<f32>),
+  Rect(Rect<f64>),
   RestoreContext,
   SaveContext,
   StrokeRect(Rect<f64>),
@@ -106,7 +106,7 @@ pub enum Canvas2dMsg {
   SetLineCap(LineCapStyle),
   SetLineJoin(LineJoinStyle),
   SetMiterLimit(f64),
-  SetGlobalAlpha(f32),
+  SetGlobalAlpha(f64),
   SetGlobalComposition(CompositionOrBlending),
   SetTransform(Transform2D<f64>),
   SetShadowOffsetX(f64),

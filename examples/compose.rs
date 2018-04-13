@@ -4,19 +4,24 @@ extern crate image;
 extern crate rustcanvas;
 
 use std::fs::File;
+use std::io::{Write};
 use std::sync::mpsc::{channel};
 
 use euclid::{Point2D, Size2D, Rect};
-use image::png::{PNGEncoder};
-use image::{ColorType, DynamicImage, open};
-use rustcanvas::{create_canvas, CanvasContextType, CanvasMsg, Canvas2dMsg};
+use image::{DynamicImage, open};
+use rustcanvas::{create_canvas, CanvasContextType, CanvasMsg, Canvas2dMsg, CompositionOrBlending, CompositionStyle};
 
 fn main() {
-  let canvas = create_canvas(1080, 1980, CanvasContextType::CTX2D);
+  let canvas = create_canvas(540, 960, CanvasContextType::CTX2D);
   let renderer = canvas.ctx;
   let (sender, receiver) = channel::<Vec<u8>>();
   let f1_raw = get_raw("examples/fixtures/6423a9e3-665c-4b4a-aaa4-5b9478c2f150.png");
   let f2_raw = get_raw("examples/fixtures/257bf48a-bf98-4e98-bfe5-410d71ec80b3.png");
+  renderer.send(
+    CanvasMsg::Canvas2d(Canvas2dMsg::SetGlobalComposition(
+      CompositionOrBlending::Composition(CompositionStyle::SrcOver)
+    ))
+  ).unwrap();
   renderer.send(
     CanvasMsg::Canvas2d(Canvas2dMsg::DrawImage(
       f1_raw,
@@ -46,9 +51,8 @@ fn main() {
 
   match receiver.recv() {
     Ok(pixels) => {
-      let f = File::create("./test.png").unwrap();
-      let png = PNGEncoder::new(f);
-      png.encode(&pixels, 1080, 1920, ColorType::RGBA(8)).expect("Write File Error");
+      let mut f = File::create("./compose.png").unwrap();
+      f.write(&pixels).unwrap();
     },
     Err(e) => panic!("Recv fail: {:?}", e),
   };
