@@ -60,19 +60,19 @@ impl Debug for CairoPattern {
   }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum CanvasMsg {
   Canvas2d(Canvas2dMsg),
   FromScript(FromScriptMsg),
   Close,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum FromScriptMsg {
   SendPixels(Sender<Option<Vec<u8>>>),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Canvas2dMsg {
   Arc(Point2D<f64>, f64, f64, f64, bool),
   ArcTo(Point2D<f64>, Point2D<f64>, f64),
@@ -117,13 +117,13 @@ pub enum Canvas2dMsg {
   NotImplement,
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, Debug)]
 pub enum FillRule {
   Nonzero,
   Evenodd,
 }
 
-#[derive(Clone, Copy, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Copy, Deserialize, PartialEq, Serialize, Debug)]
 pub enum BlendingStyle {
   Multiply,
   Screen,
@@ -189,7 +189,7 @@ impl BlendingStyle {
   }
 }
 
-#[derive(Clone, Copy, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Copy, Deserialize, PartialEq, Serialize, Debug)]
 pub enum CompositionStyle {
   SrcIn,
   SrcOut,
@@ -243,7 +243,7 @@ impl CompositionStyle {
   }
 }
 
-#[derive(Clone, Copy, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Copy, Deserialize, PartialEq, Serialize, Debug)]
 pub enum CompositionOrBlending {
   Composition(CompositionStyle),
   Blending(BlendingStyle),
@@ -271,7 +271,7 @@ impl FromStr for CompositionOrBlending {
   }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, Debug)]
 pub enum FillOrStrokeStyle {
   Color(RGBA),
   LinearGradient(LinearGradientStyle),
@@ -279,13 +279,13 @@ pub enum FillOrStrokeStyle {
   Surface(SurfaceStyle),
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, Debug)]
 pub struct CanvasGradientStop {
   pub offset: f64,
   pub color: RGBA,
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, Debug)]
 pub struct LinearGradientStyle {
   pub x0: f64,
   pub y0: f64,
@@ -307,7 +307,7 @@ impl LinearGradientStyle {
   }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, Debug)]
 pub struct RadialGradientStyle {
   pub x0: f64,
   pub y0: f64,
@@ -333,7 +333,7 @@ impl RadialGradientStyle {
   }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, Debug)]
 pub struct SurfaceStyle {
   pub surface_data: Vec<u8>,
   pub surface_size: Size2D<i32>,
@@ -353,7 +353,7 @@ impl SurfaceStyle {
   }
 }
 
-#[derive(Clone, Copy, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Copy, Deserialize, PartialEq, Serialize, Debug)]
 pub enum LineCapStyle {
   Butt = 0,
   Round = 1,
@@ -373,7 +373,7 @@ impl FromStr for LineCapStyle {
   }
 }
 
-#[derive(Clone, Copy, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Copy, Deserialize, PartialEq, Serialize, Debug)]
 pub enum LineJoinStyle {
   Round = 0,
   Bevel = 1,

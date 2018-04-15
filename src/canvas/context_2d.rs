@@ -8,8 +8,8 @@ use std::sync::mpsc::{Sender, channel};
 use std::thread;
 
 use app_units::Au;
-use cairo::{Context, Extend as CairoExtend, Format, LineCap, LineJoin, Matrix, ImageSurface, Operator};
-use cairo::{Gradient, Filter, LinearGradient, RadialGradient, SurfacePattern};
+use cairo::{Context, Format, LineCap, LineJoin, Matrix, ImageSurface, Operator};
+use cairo::{Gradient, Filter, LinearGradient, MatrixTrait, RadialGradient, SurfacePattern};
 use cairo::prelude::{Pattern, PatternTrait};
 use cssparser::{RGBA};
 use euclid::{Rect, Point2D, Vector2D, Transform2D, Size2D};
@@ -772,29 +772,9 @@ impl RectToi32 for Rect<f64> {
 /// image_size: Image dimensions
 /// crop_rect: It determines the area of the image we want to keep
 fn crop_image(image_data: Vec<u8>,
-              image_size: Size2D<f64>,
-              crop_rect: Rect<f64>) -> Vec<u8>{
-    // We're going to iterate over a pixel values array so we need integers
-  let crop_rect = crop_rect.to_i32();
-  let image_size = image_size.to_i32();
-  // Assuming 4 bytes per pixel and row-major order for storage
-  // (consecutive elements in a pixel row of the image are contiguous in memory)
-  let stride = image_size.width * 4;
-  let image_bytes_length = image_size.height * image_size.width * 4;
-  let crop_area_bytes_length = crop_rect.size.height * crop_rect.size.width * 4;
-  // If the image size is less or equal than the crop area we do nothing
-  if image_bytes_length <= crop_area_bytes_length {
-    return image_data;
-  }
-
-  let mut new_image_data = Vec::new();
-  let mut src = (crop_rect.origin.y * stride + crop_rect.origin.x * 4) as usize;
-  for _ in 0..crop_rect.size.height {
-    let row = &image_data[src .. src + (4 * crop_rect.size.width) as usize];
-    new_image_data.extend_from_slice(row);
-    src += stride as usize;
-  }
-  new_image_data
+              _image_size: Size2D<f64>,
+              _crop_rect: Rect<f64>) -> Vec<u8>{
+  image_data
 }
 
 /// It writes an image to the destination target
@@ -804,7 +784,7 @@ fn crop_image(image_data: Vec<u8>,
 /// dest_rect: Area of the destination target where the pixels will be copied
 /// smoothing_enabled: It determines if smoothing is applied to the image result
 fn write_image(cairo_ctx: &Context,
-              mut image_data: Vec<u8>,
+              image_data: Vec<u8>,
               image_size: Size2D<f64>,
               dest_rect: Rect<f64>,
               global_alpha: f64,
@@ -812,8 +792,6 @@ fn write_image(cairo_ctx: &Context,
   if image_data.is_empty() {
     return
   }
-  // rgba -> bgra
-  byte_swap(&mut image_data);
 
   // From spec https://html.spec.whatwg.org/multipage/#dom-context-2d-drawimage
   // When scaling up, if the imageSmoothingEnabled attribute is set to true, the user agent should attempt
@@ -825,23 +803,17 @@ fn write_image(cairo_ctx: &Context,
     Filter::Fast
   };
 
-  let image_size = image_size.to_i32();
-
   if let Ok(source_surface) =
-    ImageSurface::create_for_data(Box::from(image_data.as_slice()), |d| {
-      drop(d);
-    }, Format::ARgb32, image_size.width, image_size.height, image_size.width * 4) {
-      cairo_ctx.save();
-      let old_path = cairo_ctx.copy_path_flat();
-      cairo_ctx.rectangle(dest_rect.origin.x, dest_rect.origin.y, dest_rect.size.width, dest_rect.size.height);
-      cairo_ctx.clip();
-      cairo_ctx.append_path(&old_path);
+    ImageSurface::create_from_png(&mut image_data.as_slice()) {
+      let scale_x = image_size.width / dest_rect.size.width;
+      let scale_y = image_size.height / dest_rect.size.height;
       cairo_ctx.set_source_surface(&source_surface, dest_rect.origin.x, dest_rect.origin.y);
       let pattern = cairo_ctx.get_source();
       pattern.set_filter(filter);
-      pattern.set_extend(CairoExtend::Reflect);
+      let mut matrix = pattern.get_matrix();
+      matrix.scale(scale_x, scale_y);
+      pattern.set_matrix(matrix);
       cairo_ctx.paint_with_alpha(global_alpha);
-      cairo_ctx.restore();
     }
 }
 
