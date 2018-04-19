@@ -5,7 +5,7 @@ authors = ["LongYinan <lynweklm@gmail.com>"]
 
 [dependencies]
 app_units = "0.6"
-cairo-rs = { path = "../cairo", features = ["png"] }
+cairo-rs = { git = "https://github.com/gtk-rs/cairo", branch = "master", features = ["png"] }
 cssparser = { version = "0.23", features = ["serde"] }
 euclid = { version = "0.17", features = ["serde"] }
 font-loader = "0.6"
