@@ -1,10 +1,10 @@
 use std::fmt::{Debug, Error, Formatter};
 use std::str::FromStr;
-use std::sync::mpsc::{Sender};
+use std::sync::mpsc::Sender;
 
+use cairo::{LinearGradient, PatternTrait, RadialGradient, SolidPattern, SurfacePattern};
 use cssparser::RGBA;
 use euclid::{Point2D, Rect, Size2D, Transform2D, Vector2D};
-use cairo::{PatternTrait, SolidPattern, LinearGradient, RadialGradient, SurfacePattern};
 
 pub enum CairoPattern {
   Color(RGBA),
@@ -17,21 +17,11 @@ pub enum CairoPattern {
 impl Clone for CairoPattern {
   fn clone(&self) -> CairoPattern {
     match *self {
-      CairoPattern::Color(ref c) => {
-        CairoPattern::Color(c.clone())
-      },
-      CairoPattern::SolidPattern(ref s) => {
-        CairoPattern::SolidPattern(s.reference())
-      },
-      CairoPattern::LinearGradient(ref l) => {
-        CairoPattern::LinearGradient(l.reference())
-      },
-      CairoPattern::RadialGradient(ref r) => {
-        CairoPattern::RadialGradient(r.reference())
-      },
-      CairoPattern::SurfacePattern(ref s) => {
-        CairoPattern::SurfacePattern(s.reference())
-      }
+      CairoPattern::Color(ref c) => CairoPattern::Color(c.clone()),
+      CairoPattern::SolidPattern(ref s) => CairoPattern::SolidPattern(s.reference()),
+      CairoPattern::LinearGradient(ref l) => CairoPattern::LinearGradient(l.reference()),
+      CairoPattern::RadialGradient(ref r) => CairoPattern::RadialGradient(r.reference()),
+      CairoPattern::SurfacePattern(ref s) => CairoPattern::SurfacePattern(s.reference()),
     }
   }
 }
@@ -39,23 +29,25 @@ impl Clone for CairoPattern {
 impl Debug for CairoPattern {
   fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
     match *self {
-      CairoPattern::Color(ref c) => {
-        write!(
-          f, "CairoPattern::Color({:?})", c,
-        )
-      },
-      CairoPattern::LinearGradient(ref linear) => {
-        write!(f, "CairoPattern::LinearGradient{:?}", linear.get_linear_points())
-      },
-      CairoPattern::RadialGradient(ref radial) => {
-        write!(f, "CairoPattern::RadialGradient{:?}", radial.get_radial_circles())
-      },
+      CairoPattern::Color(ref c) => write!(f, "CairoPattern::Color({:?})", c,),
+      CairoPattern::LinearGradient(ref linear) => write!(
+        f,
+        "CairoPattern::LinearGradient{:?}",
+        linear.get_linear_points()
+      ),
+      CairoPattern::RadialGradient(ref radial) => write!(
+        f,
+        "CairoPattern::RadialGradient{:?}",
+        radial.get_radial_circles()
+      ),
       CairoPattern::SolidPattern(ref solid) => {
         write!(f, "CairoPattern::SolidPattern(RGBA{:?})", solid.get_rgba())
-      },
-      CairoPattern::SurfacePattern(ref surface) => {
-        write!(f, "CairoPattern::SurfacePattern({:?})", surface.get_surface())
-      },
+      }
+      CairoPattern::SurfacePattern(ref surface) => write!(
+        f,
+        "CairoPattern::SurfacePattern({:?})",
+        surface.get_surface()
+      ),
     }
   }
 }
@@ -147,22 +139,22 @@ impl FromStr for BlendingStyle {
 
   fn from_str(string: &str) -> Result<BlendingStyle, ()> {
     match string {
-      "multiply"    => Ok(BlendingStyle::Multiply),
-      "screen"      => Ok(BlendingStyle::Screen),
-      "overlay"     => Ok(BlendingStyle::Overlay),
-      "darken"      => Ok(BlendingStyle::Darken),
-      "lighten"     => Ok(BlendingStyle::Lighten),
+      "multiply" => Ok(BlendingStyle::Multiply),
+      "screen" => Ok(BlendingStyle::Screen),
+      "overlay" => Ok(BlendingStyle::Overlay),
+      "darken" => Ok(BlendingStyle::Darken),
+      "lighten" => Ok(BlendingStyle::Lighten),
       "color-dodge" => Ok(BlendingStyle::ColorDodge),
-      "color-burn"  => Ok(BlendingStyle::ColorBurn),
-      "hard-light"  => Ok(BlendingStyle::HardLight),
-      "soft-light"  => Ok(BlendingStyle::SoftLight),
-      "difference"  => Ok(BlendingStyle::Difference),
-      "exclusion"   => Ok(BlendingStyle::Exclusion),
-      "hue"         => Ok(BlendingStyle::Hue),
-      "saturation"  => Ok(BlendingStyle::Saturation),
-      "color"       => Ok(BlendingStyle::Color),
-      "luminosity"  => Ok(BlendingStyle::Luminosity),
-      _ => Err(())
+      "color-burn" => Ok(BlendingStyle::ColorBurn),
+      "hard-light" => Ok(BlendingStyle::HardLight),
+      "soft-light" => Ok(BlendingStyle::SoftLight),
+      "difference" => Ok(BlendingStyle::Difference),
+      "exclusion" => Ok(BlendingStyle::Exclusion),
+      "hue" => Ok(BlendingStyle::Hue),
+      "saturation" => Ok(BlendingStyle::Saturation),
+      "color" => Ok(BlendingStyle::Color),
+      "luminosity" => Ok(BlendingStyle::Luminosity),
+      _ => Err(()),
     }
   }
 }
@@ -170,20 +162,20 @@ impl FromStr for BlendingStyle {
 impl BlendingStyle {
   pub fn to_str(&self) -> &str {
     match *self {
-      BlendingStyle::Multiply   => "multiply",
-      BlendingStyle::Screen     => "screen",
-      BlendingStyle::Overlay    => "overlay",
-      BlendingStyle::Darken     => "darken",
-      BlendingStyle::Lighten    => "lighten",
+      BlendingStyle::Multiply => "multiply",
+      BlendingStyle::Screen => "screen",
+      BlendingStyle::Overlay => "overlay",
+      BlendingStyle::Darken => "darken",
+      BlendingStyle::Lighten => "lighten",
       BlendingStyle::ColorDodge => "color-dodge",
-      BlendingStyle::ColorBurn  => "color-burn",
-      BlendingStyle::HardLight  => "hard-light",
-      BlendingStyle::SoftLight  => "soft-light",
+      BlendingStyle::ColorBurn => "color-burn",
+      BlendingStyle::HardLight => "hard-light",
+      BlendingStyle::SoftLight => "soft-light",
       BlendingStyle::Difference => "difference",
-      BlendingStyle::Exclusion  => "exclusion",
-      BlendingStyle::Hue        => "hue",
+      BlendingStyle::Exclusion => "exclusion",
+      BlendingStyle::Hue => "hue",
       BlendingStyle::Saturation => "saturation",
-      BlendingStyle::Color      => "color",
+      BlendingStyle::Color => "color",
       BlendingStyle::Luminosity => "luminosity",
     }
   }
@@ -209,18 +201,18 @@ impl FromStr for CompositionStyle {
 
   fn from_str(string: &str) -> Result<CompositionStyle, ()> {
     match string {
-      "source-in"        => Ok(CompositionStyle::SrcIn),
-      "source-out"       => Ok(CompositionStyle::SrcOut),
-      "source-over"      => Ok(CompositionStyle::SrcOver),
-      "source-atop"      => Ok(CompositionStyle::SrcAtop),
-      "destination-in"   => Ok(CompositionStyle::DestIn),
-      "destination-out"  => Ok(CompositionStyle::DestOut),
+      "source-in" => Ok(CompositionStyle::SrcIn),
+      "source-out" => Ok(CompositionStyle::SrcOut),
+      "source-over" => Ok(CompositionStyle::SrcOver),
+      "source-atop" => Ok(CompositionStyle::SrcAtop),
+      "destination-in" => Ok(CompositionStyle::DestIn),
+      "destination-out" => Ok(CompositionStyle::DestOut),
       "destination-over" => Ok(CompositionStyle::DestOver),
       "destination-atop" => Ok(CompositionStyle::DestAtop),
-      "copy"             => Ok(CompositionStyle::Copy),
-      "lighter"          => Ok(CompositionStyle::Lighter),
-      "xor"              => Ok(CompositionStyle::Xor),
-      _ => Err(())
+      "copy" => Ok(CompositionStyle::Copy),
+      "lighter" => Ok(CompositionStyle::Lighter),
+      "xor" => Ok(CompositionStyle::Xor),
+      _ => Err(()),
     }
   }
 }
@@ -228,17 +220,17 @@ impl FromStr for CompositionStyle {
 impl CompositionStyle {
   pub fn to_str(&self) -> &str {
     match *self {
-      CompositionStyle::SrcIn    => "source-in",
-      CompositionStyle::SrcOut   => "source-out",
-      CompositionStyle::SrcOver  => "source-over",
-      CompositionStyle::SrcAtop  => "source-atop",
-      CompositionStyle::DestIn   => "destination-in",
-      CompositionStyle::DestOut  => "destination-out",
+      CompositionStyle::SrcIn => "source-in",
+      CompositionStyle::SrcOut => "source-out",
+      CompositionStyle::SrcOver => "source-over",
+      CompositionStyle::SrcAtop => "source-atop",
+      CompositionStyle::DestIn => "destination-in",
+      CompositionStyle::DestOut => "destination-out",
       CompositionStyle::DestOver => "destination-over",
       CompositionStyle::DestAtop => "destination-atop",
-      CompositionStyle::Copy     => "copy",
-      CompositionStyle::Lighter  => "lighter",
-      CompositionStyle::Xor      => "xor",
+      CompositionStyle::Copy => "copy",
+      CompositionStyle::Lighter => "lighter",
+      CompositionStyle::Xor => "xor",
     }
   }
 }
@@ -291,12 +283,17 @@ pub struct LinearGradientStyle {
   pub y0: f64,
   pub x1: f64,
   pub y1: f64,
-  pub stops: Vec<CanvasGradientStop>
+  pub stops: Vec<CanvasGradientStop>,
 }
 
 impl LinearGradientStyle {
-  pub fn new(x0: f64, y0: f64, x1: f64, y1: f64, stops: Vec<CanvasGradientStop>)
-      -> LinearGradientStyle {
+  pub fn new(
+    x0: f64,
+    y0: f64,
+    x1: f64,
+    y1: f64,
+    stops: Vec<CanvasGradientStop>,
+  ) -> LinearGradientStyle {
     LinearGradientStyle {
       x0: x0,
       y0: y0,
@@ -315,12 +312,19 @@ pub struct RadialGradientStyle {
   pub x1: f64,
   pub y1: f64,
   pub r1: f64,
-  pub stops: Vec<CanvasGradientStop>
+  pub stops: Vec<CanvasGradientStop>,
 }
 
 impl RadialGradientStyle {
-  pub fn new(x0: f64, y0: f64, r0: f64, x1: f64, y1: f64, r1: f64, stops: Vec<CanvasGradientStop>)
-      -> RadialGradientStyle {
+  pub fn new(
+    x0: f64,
+    y0: f64,
+    r0: f64,
+    x1: f64,
+    y1: f64,
+    r1: f64,
+    stops: Vec<CanvasGradientStop>,
+  ) -> RadialGradientStyle {
     RadialGradientStyle {
       x0: x0,
       y0: y0,
@@ -342,8 +346,12 @@ pub struct SurfaceStyle {
 }
 
 impl SurfaceStyle {
-  pub fn new(surface_data: Vec<u8>, surface_size: Size2D<i32>, repeat_x: bool, repeat_y: bool)
-      -> SurfaceStyle {
+  pub fn new(
+    surface_data: Vec<u8>,
+    surface_size: Size2D<i32>,
+    repeat_x: bool,
+    repeat_y: bool,
+  ) -> SurfaceStyle {
     SurfaceStyle {
       surface_data: surface_data,
       surface_size: surface_size,

@@ -1,10 +1,10 @@
 mod font;
 
-use std::default::Default;
-use euclid::{Transform2D};
-use cssparser::{RGBA};
-use super::canvas_trait::{CairoPattern};
 pub use self::font::*;
+use super::canvas_trait::CairoPattern;
+use cssparser::RGBA;
+use euclid::Transform2D;
+use std::default::Default;
 
 #[derive(Debug, Clone)]
 pub struct PaintState {
@@ -32,7 +32,12 @@ impl Default for PaintState {
       shadow_offset_x: 0.0,
       shadow_offset_y: 0.0,
       shadow_blur: 0.0,
-      shadow_color: RGBA { red: 0, green: 0, blue: 0, alpha: 0 },
+      shadow_color: RGBA {
+        red: 0,
+        green: 0,
+        blue: 0,
+        alpha: 0,
+      },
     }
   }
 }
@@ -46,8 +51,8 @@ impl PaintState {
 #[cfg(test)]
 mod paint_state_test {
   use super::*;
+  use cssparser::RGBA;
   use std::mem;
-  use cssparser::{RGBA};
 
   struct TestColorPattern {
     pub color: Color,
@@ -64,7 +69,7 @@ mod paint_state_test {
           color_pattern.color
         };
         assert_eq!(color, RGBA::new(0, 0, 0, 1).to_azure_style());
-      },
+      }
       _ => assert!(false),
     };
     match state.stroke_style {
@@ -74,7 +79,7 @@ mod paint_state_test {
           color_pattern.color
         };
         assert_eq!(color, RGBA::new(0, 0, 0, 1).to_azure_style());
-      },
+      }
       _ => assert!(false),
     };
   }

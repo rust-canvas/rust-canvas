@@ -1,5 +1,5 @@
 use cssparser::{Parser, ParserInput, Token};
-use std::ops::{Deref};
+use std::ops::Deref;
 
 use super::canvas::{Font, FontStyle, FontVariant};
 
@@ -27,18 +27,22 @@ pub fn parse_fonts_style(input: &str) -> Font {
     match css_parser.next() {
       Ok(t) => {
         match t {
-          &Token::Dimension { ref value, ref unit, .. } => {
+          &Token::Dimension {
+            ref value,
+            ref unit,
+            ..
+          } => {
             let s = unit.deref().to_lowercase();
             // handle others absolute unit here
             if s == "px" {
-              font_size = * value;
+              font_size = *value;
             } else if s == "em" {
               font_size = value * (16 as f32);
             };
-          },
+          }
           &Token::QuotedString(ref d) => {
             font_family = String::from(d.deref());
-          },
+          }
           &Token::Ident(ref d) => {
             let val = d.deref().to_lowercase();
             if index == 0 || index == 1 {
@@ -57,22 +61,21 @@ pub fn parse_fonts_style(input: &str) -> Font {
             } else {
               font = Some(String::from(val));
             }
-          },
+          }
           _ => println!("other branch: {:?}", t),
         };
         index = index + 1;
-
-      },
+      }
       Err(_) => {
         font_family = font.unwrap();
         font = None;
-      },
+      }
     };
-  };
+  }
 
   match font {
     Some(s) => font_family = String::from(s),
-    None => { },
+    None => {}
   };
 
   let font_family = match font_family.as_str() {

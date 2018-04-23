@@ -1,9 +1,9 @@
-use std::sync::mpsc::{Sender};
+use std::sync::mpsc::Sender;
 
-use euclid::{Size2D};
+use euclid::Size2D;
 
-use super::canvas_trait::{CanvasMsg};
-use super::context_2d::{Context2d};
+use super::canvas_trait::CanvasMsg;
+use super::context_2d::Context2d;
 
 pub struct CanvasElement {
   pub width: i32,
@@ -19,13 +19,13 @@ pub enum CanvasContextType {
   BITMAPRENDERER,
 }
 
-impl <'a> CanvasElement {
+impl<'a> CanvasElement {
   pub fn new(width: i32, height: i32, context_type: CanvasContextType) -> Option<CanvasElement> {
     match context_type {
       CanvasContextType::CTX2D => {
         let ctx = Context2d::start(Size2D::new(width, height));
         Some(CanvasElement { width, height, ctx })
-      },
+      }
       _ => None,
     }
   }

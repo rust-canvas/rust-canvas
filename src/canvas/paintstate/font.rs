@@ -1,4 +1,4 @@
-use csshelper::{parse_fonts_style};
+use csshelper::parse_fonts_style;
 
 #[derive(Debug, Clone)]
 pub struct Font {
@@ -29,7 +29,7 @@ pub enum FontVariant {
 
 #[cfg(test)]
 mod font_test {
-  use super::{Font};
+  use super::Font;
 
   #[test]
   fn font_default_check() {
