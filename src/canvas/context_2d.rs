@@ -1,10 +1,10 @@
 use std::cell::RefCell;
-use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
 use std::mem;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
 use std::sync::mpsc::{channel, Sender};
+use std::sync::Arc;
 use std::thread;
 
 use app_units::Au;
@@ -37,7 +37,7 @@ impl FontKey {
 pub struct Context2d {
   pub state: PaintState,
   saved_states: Vec<PaintState>,
-  cairo_ctx: Context,
+  pub cairo_ctx: Context,
   font_context: RefCell<FontContext<FontKey>>,
   font_caches: BTreeMap<String, FontKey>,
 }
@@ -99,7 +99,7 @@ impl Context2d {
     sender
   }
 
-  fn handle_canvas2d_msg(&mut self, message: Canvas2dMsg) {
+  pub fn handle_canvas2d_msg(&mut self, message: Canvas2dMsg) {
     match message {
       Canvas2dMsg::FillText(text, x, y, max_width) => self.fill_text(text, x, y, max_width),
       Canvas2dMsg::StrokeText(text, x, y, max_width) => self.stroke_text(text, x, y, max_width),
@@ -151,7 +151,7 @@ impl Context2d {
       Canvas2dMsg::SetGlobalAlpha(alpha) => self.set_global_alpha(alpha),
       Canvas2dMsg::SetGlobalComposition(op) => self.set_global_composition(op),
       Canvas2dMsg::GetImageData(dest_rect, canvas_size, chan) => {
-        self.image_data(dest_rect, canvas_size, chan)
+        chan.send(self.image_data(dest_rect, canvas_size)).unwrap();
       }
       Canvas2dMsg::PutImageData(imagedata, offset, image_data_size, dirty_rect) => {
         self.put_image_data(imagedata, offset, image_data_size, dirty_rect)
@@ -164,7 +164,7 @@ impl Context2d {
     }
   }
 
-  fn add_font_instance(&mut self, bytes: Vec<u8>, family_name: String) -> Result<(), ()> {
+  pub fn add_font_instance(&mut self, bytes: Vec<u8>, family_name: String) -> Result<(), ()> {
     match self.font_caches.entry(family_name) {
       Entry::Occupied(_) => Ok(()),
       Entry::Vacant(entry) => {
@@ -184,29 +184,29 @@ impl Context2d {
     }
   }
 
-  fn save_context_state(&mut self) {
+  pub fn save_context_state(&mut self) {
     self.saved_states.push(self.state.clone());
     self.cairo_ctx.save();
   }
 
-  fn restore_context_state(&mut self) {
+  pub fn restore_context_state(&mut self) {
     if let Some(state) = self.saved_states.pop() {
       mem::replace(&mut self.state, state);
       self.cairo_ctx.restore();
     }
   }
 
-  fn fill_text(&mut self, text: String, x: f32, y: f32, max_width: Option<f32>) {
+  pub fn fill_text(&mut self, text: String, x: f32, y: f32, max_width: Option<f32>) {
     self.draw_text(text, x, y, max_width);
     self.fill();
   }
 
-  fn stroke_text(&mut self, text: String, x: f32, y: f32, max_width: Option<f32>) {
+  pub fn stroke_text(&mut self, text: String, x: f32, y: f32, max_width: Option<f32>) {
     self.draw_text(text, x, y, max_width);
     self.stroke();
   }
 
-  fn draw_text(&mut self, text: String, x: f32, y: f32, max_width: Option<f32>) {
+  pub fn draw_text(&mut self, text: String, x: f32, y: f32, max_width: Option<f32>) {
     let font = &self.state.font;
     let family = &font.font_family;
     let font_keys = &self.font_caches;
@@ -292,7 +292,7 @@ impl Context2d {
     });
   }
 
-  fn fill_rect(&self, rect: &Rect<f64>) {
+  pub fn fill_rect(&self, rect: &Rect<f64>) {
     if is_zero_size_gradient(&self.state.fill_style) {
       return; // Paint nothing if gradient size is zero.
     }
@@ -327,7 +327,7 @@ impl Context2d {
     self.cairo_ctx.fill();
   }
 
-  fn clear_rect(&self, rect: &Rect<f64>) {
+  pub fn clear_rect(&self, rect: &Rect<f64>) {
     let operator = self.cairo_ctx.get_operator();
     self.cairo_ctx.set_operator(Operator::Clear);
     self.cairo_ctx.rectangle(
@@ -340,7 +340,7 @@ impl Context2d {
     self.cairo_ctx.set_operator(operator);
   }
 
-  fn stroke_rect(&self, rect: &Rect<f64>) {
+  pub fn stroke_rect(&self, rect: &Rect<f64>) {
     if is_zero_size_gradient(&self.state.stroke_style) {
       return; // Paint nothing if gradient size is zero.
     }
@@ -366,15 +366,15 @@ impl Context2d {
     self.cairo_ctx.stroke();
   }
 
-  fn begin_path(&self) {
+  pub fn begin_path(&self) {
     self.cairo_ctx.new_path();
   }
 
-  fn close_path(&self) {
+  pub fn close_path(&self) {
     self.cairo_ctx.close_path()
   }
 
-  fn fill(&self) {
+  pub fn fill(&self) {
     if is_zero_size_gradient(&self.state.fill_style) {
       return; // Paint nothing if gradient size is zero.
     }
@@ -382,7 +382,7 @@ impl Context2d {
     self.cairo_ctx.fill();
   }
 
-  fn stroke(&self) {
+  pub fn stroke(&self) {
     if is_zero_size_gradient(&self.state.stroke_style) {
       return; // Paint nothing if gradient size is zero.
     }
@@ -390,16 +390,16 @@ impl Context2d {
     self.cairo_ctx.stroke();
   }
 
-  fn clip(&self) {
+  pub fn clip(&self) {
     self.cairo_ctx.clip();
   }
 
-  fn is_point_in_path(&mut self, x: f64, y: f64, _fill_rule: FillRule, chan: Sender<bool>) {
+  pub fn is_point_in_path(&mut self, x: f64, y: f64, _fill_rule: FillRule, chan: Sender<bool>) {
     let result = self.cairo_ctx.in_stroke(x, y);
     chan.send(result).unwrap();
   }
 
-  fn draw_image(
+  pub fn draw_image(
     &self,
     image_data: Vec<u8>,
     image_size: Size2D<f64>,
@@ -439,7 +439,7 @@ impl Context2d {
     }
   }
 
-  fn ellipse(
+  pub fn ellipse(
     &mut self,
     center: &Point2D<f64>,
     radius_x: f64,
@@ -458,7 +458,7 @@ impl Context2d {
     self.cairo_ctx.set_matrix(old_martix);
   }
 
-  fn set_fill_style(&self, style: FillOrStrokeStyle) {
+  pub fn set_fill_style(&self, style: FillOrStrokeStyle) {
     match style {
       FillOrStrokeStyle::Color(rgba) => self.cairo_ctx.set_source_rgba(
         rgba.red as f64 / 255.0f64,
@@ -470,11 +470,11 @@ impl Context2d {
     }
   }
 
-  fn set_font_style(&mut self, font_style: &str) {
+  pub fn set_font_style(&mut self, font_style: &str) {
     self.state.font = Font::new(font_style);
   }
 
-  fn set_stroke_style(&self, style: FillOrStrokeStyle) {
+  pub fn set_stroke_style(&self, style: FillOrStrokeStyle) {
     match style {
       FillOrStrokeStyle::Color(rgba) => self.cairo_ctx.set_source_rgba(
         rgba.red as f64 / 255.0f64,
@@ -486,49 +486,49 @@ impl Context2d {
     }
   }
 
-  fn set_line_width(&self, width: f64) {
+  pub fn set_line_width(&self, width: f64) {
     self.cairo_ctx.set_line_width(width);
   }
 
-  fn set_line_cap(&mut self, cap: LineCapStyle) {
+  pub fn set_line_cap(&mut self, cap: LineCapStyle) {
     self.cairo_ctx.set_line_cap(cap.to_cairo_style());
   }
 
-  fn set_line_join(&self, join: LineJoinStyle) {
+  pub fn set_line_join(&self, join: LineJoinStyle) {
     self.cairo_ctx.set_line_join(join.to_cairo_style());
   }
 
-  fn set_miter_limit(&self, limit: f64) {
+  pub fn set_miter_limit(&self, limit: f64) {
     self.cairo_ctx.set_miter_limit(limit);
   }
 
-  fn set_transform(&mut self, transform: &Transform2D<f64>) {
+  pub fn set_transform(&mut self, transform: &Transform2D<f64>) {
     self.state.transform = transform.clone();
     self.cairo_ctx.transform(transform.to_cairo_style());
   }
 
-  fn set_global_alpha(&mut self, alpha: f64) {
+  pub fn set_global_alpha(&mut self, alpha: f64) {
     self.state.global_alpha = alpha;
     self.cairo_ctx.paint_with_alpha(alpha)
   }
 
-  fn set_global_composition(&self, op: CompositionOrBlending) {
+  pub fn set_global_composition(&self, op: CompositionOrBlending) {
     self.cairo_ctx.set_operator(op.to_cairo_style());
   }
 
-  fn set_shadow_offset_x(&mut self, value: f64) {
+  pub fn set_shadow_offset_x(&mut self, value: f64) {
     self.state.shadow_offset_x = value;
   }
 
-  fn set_shadow_offset_y(&mut self, value: f64) {
+  pub fn set_shadow_offset_y(&mut self, value: f64) {
     self.state.shadow_offset_y = value;
   }
 
-  fn set_shadow_blur(&mut self, value: f64) {
+  pub fn set_shadow_blur(&mut self, value: f64) {
     self.state.shadow_blur = value;
   }
 
-  fn set_shadow_color(&mut self, value: RGBA) {
+  pub fn set_shadow_color(&mut self, value: RGBA) {
     self.state.shadow_color = value;
   }
 
@@ -539,7 +539,7 @@ impl Context2d {
         || self.state.shadow_blur != 0.0f64)
   }
 
-  fn draw_with_shadow<F>(&self, rect: &Rect<f64>, draw_shadow_source: F)
+  pub fn draw_with_shadow<F>(&self, rect: &Rect<f64>, draw_shadow_source: F)
   where
     F: FnOnce(&Context),
   {
@@ -576,7 +576,7 @@ impl Context2d {
     self.cairo_ctx.restore();
   }
 
-  fn draw_image_self(
+  pub fn draw_image_self(
     &mut self,
     image_size: Size2D<f64>,
     dest_rect: Rect<f64>,
@@ -616,15 +616,15 @@ impl Context2d {
     }
   }
 
-  fn move_to(&self, point: &Point2D<f64>) {
+  pub fn move_to(&self, point: &Point2D<f64>) {
     self.cairo_ctx.move_to(point.x, point.y)
   }
 
-  fn line_to(&self, point: &Point2D<f64>) {
+  pub fn line_to(&self, point: &Point2D<f64>) {
     self.cairo_ctx.line_to(point.x, point.y)
   }
 
-  fn rect(&self, rect: &Rect<f64>) {
+  pub fn rect(&self, rect: &Rect<f64>) {
     self.move_to(&Point2D::new(rect.origin.x, rect.origin.y));
     self.line_to(&Point2D::new(
       rect.origin.x + rect.size.width,
@@ -641,7 +641,7 @@ impl Context2d {
     self.close_path();
   }
 
-  fn quadratic_curve_to(&self, cp: &Point2D<f64>, endpoint: &Point2D<f64>) {
+  pub fn quadratic_curve_to(&self, cp: &Point2D<f64>, endpoint: &Point2D<f64>) {
     let (x, y) = self.cairo_ctx.get_current_point();
     let cp1x = (x + 2.0f64 * cp.x) / 3.0f64;
     let cp1y = (y + 2.0f64 * cp.y) / 3.0f64;
@@ -652,13 +652,20 @@ impl Context2d {
       .curve_to(cp1x, cp1y, cp2x, cp2y, endpoint.x, endpoint.y);
   }
 
-  fn bezier_curve_to(&self, cp1: &Point2D<f64>, cp2: &Point2D<f64>, endpoint: &Point2D<f64>) {
+  pub fn bezier_curve_to(&self, cp1: &Point2D<f64>, cp2: &Point2D<f64>, endpoint: &Point2D<f64>) {
     self
       .cairo_ctx
       .curve_to(cp1.x, cp1.y, cp2.x, cp2.y, endpoint.x, endpoint.y);
   }
 
-  fn arc(&self, center: &Point2D<f64>, radius: f64, start_angle: f64, end_angle: f64, ccw: bool) {
+  pub fn arc(
+    &self,
+    center: &Point2D<f64>,
+    radius: f64,
+    start_angle: f64,
+    end_angle: f64,
+    ccw: bool,
+  ) {
     if !ccw {
       self
         .cairo_ctx
@@ -670,7 +677,7 @@ impl Context2d {
     }
   }
 
-  fn arc_to(&self, cp1: &Point2D<f64>, cp2: &Point2D<f64>, radius: f64) {
+  pub fn arc_to(&self, cp1: &Point2D<f64>, cp2: &Point2D<f64>, radius: f64) {
     let (cpx, cpy) = self.cairo_ctx.get_current_point();
     let cp1 = *cp1;
     let cp2 = *cp2;
@@ -831,15 +838,11 @@ impl Context2d {
     }
   }
 
-  fn image_data(&mut self, dest_rect: Rect<i32>, canvas_size: Size2D<f64>, chan: Sender<Vec<u8>>) {
-    let dest_data = self.read_pixels(dest_rect, canvas_size);
-
-    // bgra -> rgba
-    // byte_swap(&mut dest_data);
-    chan.send(dest_data).expect("Send image_data fail");
+  pub fn image_data(&mut self, dest_rect: Rect<i32>, canvas_size: Size2D<f64>) -> Vec<u8> {
+    self.read_pixels(dest_rect, canvas_size)
   }
 
-  fn send_pixels(&mut self, _chan: Sender<Option<Vec<u8>>>) {
+  pub fn send_pixels(&mut self, _chan: Sender<Option<Vec<u8>>>) {
     unimplemented!();
   }
 }
