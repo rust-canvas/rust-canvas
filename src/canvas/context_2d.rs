@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
+use std::error::Error;
+use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::mem;
 use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
 use std::sync::mpsc::{channel, Sender};
@@ -34,6 +36,23 @@ impl FontKey {
   }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Context2DError {
+  reason: String,
+}
+
+impl Display for Context2DError {
+  fn fmt(&self, f: &mut Formatter) -> FmtResult {
+    write!(f, "{}", self.reason)
+  }
+}
+
+impl Error for Context2DError {
+  fn description(&self) -> &str {
+    self.reason.as_ref()
+  }
+}
+
 pub struct Context2d {
   pub state: PaintState,
   saved_states: Vec<PaintState>,
@@ -52,16 +71,21 @@ impl Context2d {
     dist
   }
 
-  pub fn new(size: Size2D<i32>) -> Context2d {
-    let image_surface = ImageSurface::create(Format::ARgb32, size.width, size.height)
-      .expect("create cairo image surface fail");
+  pub fn new(size: Size2D<i32>) -> Result<Context2d, Context2DError> {
+    let image_surface = try!(
+      ImageSurface::create(Format::ARgb32, size.width, size.height).map_err(|_| Context2DError {
+        reason: "Cairo create ImageSurface fail".to_owned()
+      })
+    );
     let cairo_ctx = Context::new(&image_surface);
 
     let mut ctx = Context2d {
       state: PaintState::new(),
       saved_states: vec![],
       cairo_ctx,
-      font_context: RefCell::new(FontContext::new().expect("init FontContext fail")),
+      font_context: RefCell::new(try!(FontContext::new().map_err(|()| Context2DError {
+        reason: "Pathfinder create FontContext fail".to_owned()
+      }))),
       font_caches: BTreeMap::new(),
     };
     system_fonts::query_all().into_iter().for_each(|font| {
@@ -72,7 +96,7 @@ impl Context2d {
       ctx.add_font_instance(buffer, font).unwrap();
     });
 
-    ctx
+    Ok(ctx)
   }
 
   pub fn start(size: Size2D<i32>) -> Sender<CanvasMsg> {
@@ -80,12 +104,14 @@ impl Context2d {
     thread::Builder::new()
       .name("CanvasThread".to_owned())
       .spawn(move || {
-        let mut painter = Context2d::new(size);
+        let mut painter = Context2d::new(size).expect("Create Context2D fail");
         loop {
           let msg = receiver.recv();
           match msg.expect("CanvasThread recive msg fail") {
             CanvasMsg::Canvas2d(message) => {
-              painter.handle_canvas2d_msg(message);
+              painter
+                .handle_canvas2d_msg(message)
+                .expect("Handle canvas2d msg error");
             }
             CanvasMsg::Close => break,
             CanvasMsg::FromScript(message) => match message {
@@ -99,21 +125,23 @@ impl Context2d {
     sender
   }
 
-  pub fn handle_canvas2d_msg(&mut self, message: Canvas2dMsg) {
+  pub fn handle_canvas2d_msg(&mut self, message: Canvas2dMsg) -> Result<(), Context2DError> {
     match message {
       Canvas2dMsg::FillText(text, x, y, max_width) => self.fill_text(text, x, y, max_width),
       Canvas2dMsg::StrokeText(text, x, y, max_width) => self.stroke_text(text, x, y, max_width),
       Canvas2dMsg::FillRect(ref rect) => self.fill_rect(rect),
       Canvas2dMsg::StrokeRect(ref rect) => self.stroke_rect(rect),
-      Canvas2dMsg::ClearRect(ref rect) => self.clear_rect(rect),
-      Canvas2dMsg::BeginPath => self.begin_path(),
-      Canvas2dMsg::ClosePath => self.close_path(),
-      Canvas2dMsg::Fill => self.fill(),
-      Canvas2dMsg::Stroke => self.stroke(),
-      Canvas2dMsg::Clip => self.clip(),
-      Canvas2dMsg::IsPointInPath(x, y, fill_rule, chan) => {
-        self.is_point_in_path(x, y, fill_rule, chan)
-      }
+      Canvas2dMsg::ClearRect(ref rect) => Ok(self.clear_rect(rect)),
+      Canvas2dMsg::BeginPath => Ok(self.begin_path()),
+      Canvas2dMsg::ClosePath => Ok(self.close_path()),
+      Canvas2dMsg::Fill => Ok(self.fill()),
+      Canvas2dMsg::Stroke => Ok(self.stroke()),
+      Canvas2dMsg::Clip => Ok(self.clip()),
+      Canvas2dMsg::IsPointInPath(x, y, fill_rule, chan) => chan
+        .send(self.is_point_in_path(x, y, fill_rule))
+        .map_err(|err| Context2DError {
+          reason: format!("{}", err),
+        }),
       Canvas2dMsg::DrawImage(imagedata, image_size, dest_rect, source_rect, smoothing_enabled) => {
         self.draw_image(
           imagedata,
@@ -126,41 +154,45 @@ impl Context2d {
       Canvas2dMsg::DrawImageSelf(image_size, dest_rect, source_rect, smoothing_enabled) => {
         self.draw_image_self(image_size, dest_rect, source_rect, smoothing_enabled)
       }
-      Canvas2dMsg::MoveTo(ref point) => self.move_to(point),
-      Canvas2dMsg::LineTo(ref point) => self.line_to(point),
-      Canvas2dMsg::Rect(ref rect) => self.rect(rect),
-      Canvas2dMsg::QuadraticCurveTo(ref cp, ref pt) => self.quadratic_curve_to(cp, pt),
-      Canvas2dMsg::BezierCurveTo(ref cp1, ref cp2, ref pt) => self.bezier_curve_to(cp1, cp2, pt),
+      Canvas2dMsg::MoveTo(ref point) => Ok(self.move_to(point)),
+      Canvas2dMsg::LineTo(ref point) => Ok(self.line_to(point)),
+      Canvas2dMsg::Rect(ref rect) => Ok(self.rect(rect)),
+      Canvas2dMsg::QuadraticCurveTo(ref cp, ref pt) => Ok(self.quadratic_curve_to(cp, pt)),
+      Canvas2dMsg::BezierCurveTo(ref cp1, ref cp2, ref pt) => {
+        Ok(self.bezier_curve_to(cp1, cp2, pt))
+      }
       Canvas2dMsg::Arc(ref center, radius, start, end, ccw) => {
-        self.arc(center, radius, start, end, ccw)
+        Ok(self.arc(center, radius, start, end, ccw))
       }
-      Canvas2dMsg::ArcTo(ref cp1, ref cp2, radius) => self.arc_to(cp1, cp2, radius),
+      Canvas2dMsg::ArcTo(ref cp1, ref cp2, radius) => Ok(self.arc_to(cp1, cp2, radius)),
       Canvas2dMsg::Ellipse(ref center, radius_x, radius_y, rotation, start, end, ccw) => {
-        self.ellipse(center, radius_x, radius_y, rotation, start, end, ccw)
+        Ok(self.ellipse(center, radius_x, radius_y, rotation, start, end, ccw))
       }
-      Canvas2dMsg::RestoreContext => self.restore_context_state(),
-      Canvas2dMsg::SaveContext => self.save_context_state(),
-      Canvas2dMsg::SetFillStyle(style) => self.set_fill_style(style),
-      Canvas2dMsg::SetFontStyle(font_rule) => self.set_font_style(&font_rule),
-      Canvas2dMsg::SetStrokeStyle(style) => self.set_stroke_style(style),
-      Canvas2dMsg::SetLineWidth(width) => self.set_line_width(width),
-      Canvas2dMsg::SetLineCap(cap) => self.set_line_cap(cap),
-      Canvas2dMsg::SetLineJoin(join) => self.set_line_join(join),
-      Canvas2dMsg::SetMiterLimit(limit) => self.set_miter_limit(limit),
-      Canvas2dMsg::SetTransform(ref matrix) => self.set_transform(matrix),
-      Canvas2dMsg::SetGlobalAlpha(alpha) => self.set_global_alpha(alpha),
-      Canvas2dMsg::SetGlobalComposition(op) => self.set_global_composition(op),
-      Canvas2dMsg::GetImageData(dest_rect, canvas_size, chan) => {
-        chan.send(self.image_data(dest_rect, canvas_size)).unwrap();
-      }
+      Canvas2dMsg::RestoreContext => Ok(self.restore_context_state()),
+      Canvas2dMsg::SaveContext => Ok(self.save_context_state()),
+      Canvas2dMsg::SetFillStyle(style) => Ok(self.set_fill_style(style)),
+      Canvas2dMsg::SetFontStyle(font_rule) => Ok(self.set_font_style(&font_rule)),
+      Canvas2dMsg::SetStrokeStyle(style) => Ok(self.set_stroke_style(style)),
+      Canvas2dMsg::SetLineWidth(width) => Ok(self.set_line_width(width)),
+      Canvas2dMsg::SetLineCap(cap) => Ok(self.set_line_cap(cap)),
+      Canvas2dMsg::SetLineJoin(join) => Ok(self.set_line_join(join)),
+      Canvas2dMsg::SetMiterLimit(limit) => Ok(self.set_miter_limit(limit)),
+      Canvas2dMsg::SetTransform(ref matrix) => Ok(self.set_transform(matrix)),
+      Canvas2dMsg::SetGlobalAlpha(alpha) => Ok(self.set_global_alpha(alpha)),
+      Canvas2dMsg::SetGlobalComposition(op) => Ok(self.set_global_composition(op)),
+      Canvas2dMsg::GetImageData(dest_rect, canvas_size, chan) => chan
+        .send(self.image_data(dest_rect, canvas_size))
+        .map_err(|err| Context2DError {
+          reason: format!("{}", err),
+        }),
       Canvas2dMsg::PutImageData(imagedata, offset, image_data_size, dirty_rect) => {
-        self.put_image_data(imagedata, offset, image_data_size, dirty_rect)
+        Ok(self.put_image_data(imagedata, offset, image_data_size, dirty_rect))
       }
-      Canvas2dMsg::SetShadowOffsetX(value) => self.set_shadow_offset_x(value),
-      Canvas2dMsg::SetShadowOffsetY(value) => self.set_shadow_offset_y(value),
-      Canvas2dMsg::SetShadowBlur(value) => self.set_shadow_blur(value),
-      Canvas2dMsg::SetShadowColor(color) => self.set_shadow_color(color),
-      Canvas2dMsg::NotImplement => {}
+      Canvas2dMsg::SetShadowOffsetX(value) => Ok(self.set_shadow_offset_x(value)),
+      Canvas2dMsg::SetShadowOffsetY(value) => Ok(self.set_shadow_offset_y(value)),
+      Canvas2dMsg::SetShadowBlur(value) => Ok(self.set_shadow_blur(value)),
+      Canvas2dMsg::SetShadowColor(color) => Ok(self.set_shadow_color(color)),
+      Canvas2dMsg::NotImplement => Ok(()),
     }
   }
 
@@ -169,17 +201,14 @@ impl Context2d {
       Entry::Occupied(_) => Ok(()),
       Entry::Vacant(entry) => {
         let font_key = FontKey::new();
-        match self
-          .font_context
-          .borrow_mut()
-          .add_font_from_memory(&font_key, Arc::new(bytes), 0)
-        {
-          Ok(_) => {
-            entry.insert(font_key);
-            Ok(())
-          }
-          Err(e) => panic!(e),
-        }
+        try!(
+          self
+            .font_context
+            .borrow_mut()
+            .add_font_from_memory(&font_key, Arc::new(bytes), 0)
+        );
+        entry.insert(font_key);
+        Ok(())
       }
     }
   }
@@ -196,26 +225,46 @@ impl Context2d {
     }
   }
 
-  pub fn fill_text(&mut self, text: String, x: f32, y: f32, max_width: Option<f32>) {
-    self.draw_text(text, x, y, max_width);
+  pub fn fill_text(
+    &mut self,
+    text: String,
+    x: f32,
+    y: f32,
+    max_width: Option<f32>,
+  ) -> Result<(), Context2DError> {
+    try!(self.draw_text(text, x, y, max_width));
     self.fill();
+    Ok(())
   }
 
-  pub fn stroke_text(&mut self, text: String, x: f32, y: f32, max_width: Option<f32>) {
-    self.draw_text(text, x, y, max_width);
+  pub fn stroke_text(
+    &mut self,
+    text: String,
+    x: f32,
+    y: f32,
+    max_width: Option<f32>,
+  ) -> Result<(), Context2DError> {
+    try!(self.draw_text(text, x, y, max_width));
     self.stroke();
+    Ok(())
   }
 
-  pub fn draw_text(&mut self, text: String, x: f32, y: f32, max_width: Option<f32>) {
+  pub fn draw_text(
+    &mut self,
+    text: String,
+    x: f32,
+    y: f32,
+    max_width: Option<f32>,
+  ) -> Result<(), Context2DError> {
     let font = &self.state.font;
     let family = &font.font_family;
     let font_keys = &self.font_caches;
     let size = &font.font_size;
     let font_key = match font_keys.get(family) {
       Some(f) => f,
-      None => font_keys
-        .get(SANS_SERIF_FONT_FAMILY)
-        .expect("Get fallback font fail"),
+      None => try!(font_keys.get(SANS_SERIF_FONT_FAMILY).ok_or(Context2DError {
+        reason: "Font fallback error, can not found any default font".to_owned()
+      })),
     };
     let instance = FontInstance::new(font_key, Au::from_px(*size as i32));
     let mut offset_x = x;
@@ -225,41 +274,61 @@ impl Context2d {
           .chars()
           .map(|c| {
             let font_context = self.font_context.borrow();
-            let pos = font_context
-              .get_char_index(&font_key, c)
-              .expect("Get Char index font_context fail");
+            let pos = try!(
+              font_context
+                .get_char_index(&font_key, c)
+                .ok_or(Context2DError {
+                  reason: "Pathfinder get char index fail".to_owned()
+                })
+            );
             let glyph_key = GlyphKey::new(pos, SubpixelOffset(0));
-            let glyph_dimensions = font_context
-              .glyph_dimensions(&instance, &glyph_key, false)
-              .expect("Get glyph dimensions fail");
-            glyph_dimensions.advance
+            let glyph_dimensions = try!(
+              font_context
+                .glyph_dimensions(&instance, &glyph_key, false)
+                .map_err(|()| Context2DError {
+                  reason: "Pathfinder glyph_dimensions fail".to_owned()
+                })
+            );
+            Ok(glyph_dimensions.advance)
           })
-          .sum::<f32>();
-        if total_width > m {
-          m / total_width
+          .sum::<Result<f32, Context2DError>>();
+        if try!(total_width) > m {
+          m / try!(total_width)
         } else {
           1.0
         }
       }
       None => 1.0,
     };
-    text.chars().for_each(|c| {
+    for c in text.chars() {
       let font_context = self.font_context.borrow();
-      let pos = font_context
-        .get_char_index(&font_key, c)
-        .expect("Get Char index font_context fail");
+      let pos = try!(
+        font_context
+          .get_char_index(&font_key, c)
+          .ok_or(Context2DError {
+            reason: "Get Char index font_context fail".to_owned()
+          })
+      );
       let glyph_key = GlyphKey::new(pos, SubpixelOffset(0));
-      let glyph_dimensions = font_context
-        .glyph_dimensions(&instance, &glyph_key, false)
-        .expect("Get glyph dimensions fail");
+      let glyph_dimensions = try!(
+        font_context
+          .glyph_dimensions(&instance, &glyph_key, false)
+          .map_err(|()| Context2DError {
+            reason: "Get glyph dimensions fail".to_owned()
+          })
+      );
       let text_width = glyph_dimensions.size.width;
       let advance = glyph_dimensions.advance;
       let advance_offset = advance / 2.0 * scale;
       offset_x = offset_x + advance_offset;
       let text_width = text_width as f32 * scale;
-      let glyph_outline = font_context
-        .glyph_outline(&instance, &glyph_key)
-        .expect("Glyph outline fail");
+      let glyph_outline = try!(
+        font_context
+          .glyph_outline(&instance, &glyph_key)
+          .map_err(|()| Context2DError {
+            reason: "Pathfinder glyph_outline fail".to_owned()
+          })
+      );
       glyph_outline
         .iter()
         .map(|e| flip_text(scale)(e))
@@ -289,12 +358,13 @@ impl Context2d {
           ),
         });
       offset_x = offset_x + advance_offset + text_width;
-    });
+    }
+    Ok(())
   }
 
-  pub fn fill_rect(&self, rect: &Rect<f64>) {
+  pub fn fill_rect(&self, rect: &Rect<f64>) -> Result<(), Context2DError> {
     if is_zero_size_gradient(&self.state.fill_style) {
-      return; // Paint nothing if gradient size is zero.
+      return Ok(()); // Paint nothing if gradient size is zero.
     }
 
     let draw_rect = Rect::new(
@@ -308,14 +378,16 @@ impl Context2d {
     );
 
     if self.need_to_draw_shadow() {
-      self.draw_with_shadow(&draw_rect, |new_cairo_ctx: &Context| {
-        new_cairo_ctx.rectangle(
-          draw_rect.origin.x,
-          draw_rect.origin.y,
-          draw_rect.size.width,
-          draw_rect.size.height,
-        );
-      });
+      try!(
+        self.draw_with_shadow(&draw_rect, |new_cairo_ctx: &Context| Ok(
+          new_cairo_ctx.rectangle(
+            draw_rect.origin.x,
+            draw_rect.origin.y,
+            draw_rect.size.width,
+            draw_rect.size.height,
+          )
+        ))
+      );
     } else {
       self.cairo_ctx.rectangle(
         draw_rect.origin.x,
@@ -325,6 +397,7 @@ impl Context2d {
       );
     }
     self.cairo_ctx.fill();
+    Ok(())
   }
 
   pub fn clear_rect(&self, rect: &Rect<f64>) {
@@ -340,20 +413,20 @@ impl Context2d {
     self.cairo_ctx.set_operator(operator);
   }
 
-  pub fn stroke_rect(&self, rect: &Rect<f64>) {
+  pub fn stroke_rect(&self, rect: &Rect<f64>) -> Result<(), Context2DError> {
     if is_zero_size_gradient(&self.state.stroke_style) {
-      return; // Paint nothing if gradient size is zero.
+      return Ok(()); // Paint nothing if gradient size is zero.
     }
 
     if self.need_to_draw_shadow() {
-      self.draw_with_shadow(&rect, |new_cairo_ctx: &Context| {
+      try!(self.draw_with_shadow(&rect, |new_cairo_ctx: &Context| Ok(
         new_cairo_ctx.rectangle(
           rect.origin.x,
           rect.origin.y,
           rect.size.width,
           rect.size.height,
-        );
-      });
+        )
+      )));
     } else if rect.size.width == 0. || rect.size.height == 0. {
     } else {
       self.cairo_ctx.rectangle(
@@ -364,6 +437,7 @@ impl Context2d {
       );
     }
     self.cairo_ctx.stroke();
+    Ok(())
   }
 
   pub fn begin_path(&self) {
@@ -394,9 +468,8 @@ impl Context2d {
     self.cairo_ctx.clip();
   }
 
-  pub fn is_point_in_path(&mut self, x: f64, y: f64, _fill_rule: FillRule, chan: Sender<bool>) {
-    let result = self.cairo_ctx.in_stroke(x, y);
-    chan.send(result).unwrap();
+  pub fn is_point_in_path(&mut self, x: f64, y: f64, _fill_rule: FillRule) -> bool {
+    self.cairo_ctx.in_stroke(x, y)
   }
 
   pub fn draw_image(
@@ -406,7 +479,7 @@ impl Context2d {
     dest_rect: Rect<f64>,
     source_rect: Rect<f64>,
     smoothing_enabled: bool,
-  ) {
+  ) -> Result<(), Context2DError> {
     // We round up the floating pixel values to draw the pixels
     let source_rect = source_rect.ceil();
     // It discards the extra pixels (if any) that won't be painted
@@ -425,8 +498,8 @@ impl Context2d {
           dest_rect,
           self.state.global_alpha,
           smoothing_enabled,
-        );
-      });
+        )
+      })
     } else {
       write_image(
         &self.cairo_ctx,
@@ -435,7 +508,7 @@ impl Context2d {
         dest_rect,
         self.state.global_alpha,
         smoothing_enabled,
-      );
+      )
     }
   }
 
@@ -539,18 +612,26 @@ impl Context2d {
         || self.state.shadow_blur != 0.0f64)
   }
 
-  pub fn draw_with_shadow<F>(&self, rect: &Rect<f64>, draw_shadow_source: F)
+  pub fn draw_with_shadow<F>(
+    &self,
+    rect: &Rect<f64>,
+    draw_shadow_source: F,
+  ) -> Result<(), Context2DError>
   where
-    F: FnOnce(&Context),
+    F: FnOnce(&Context) -> Result<(), Context2DError>,
   {
     self.cairo_ctx.save();
     let pad = self.state.shadow_blur * 2.0f64;
     let shadow_src_rect = self.state.transform.transform_rect(rect);
-    let shadow_surface = ImageSurface::create(
-      Format::ARgb32,
-      (shadow_src_rect.size.width + pad) as i32,
-      (shadow_src_rect.size.height + pad) as i32,
-    ).expect("Create shadow surface fail");
+    let shadow_surface = try!(
+      ImageSurface::create(
+        Format::ARgb32,
+        (shadow_src_rect.size.width + pad) as i32,
+        (shadow_src_rect.size.height + pad) as i32,
+      ).map_err(|_| Context2DError {
+        reason: "Cairo create ImageSurface in draw_with_shadow fail".to_owned()
+      })
+    );
     let shadow_ctx = Context::new(&shadow_surface);
     let mut old_pattern = self.cairo_ctx.get_source();
     let surface_pattern = SurfacePattern::create(&shadow_surface);
@@ -571,9 +652,10 @@ impl Context2d {
     // shadow_ctx.mask_surface(&origin_surface_as_pattern, pad, pad)
     // self.cairo_ctx.set_source_surface(shadow_surface, dx - sx + (context->state->shadowOffsetX / fx) - pad + 1.4,
     // dy - sy + (context->state->shadowOffsetY / fy) - pad + 1.4);
-    draw_shadow_source(&shadow_ctx);
+    try!(draw_shadow_source(&shadow_ctx));
     self.cairo_ctx.set_source(&mut old_pattern);
     self.cairo_ctx.restore();
+    Ok(())
   }
 
   pub fn draw_image_self(
@@ -582,7 +664,7 @@ impl Context2d {
     dest_rect: Rect<f64>,
     source_rect: Rect<f64>,
     smoothing_enabled: bool,
-  ) {
+  ) -> Result<(), Context2DError> {
     // Reads pixels from source image
     // In this case source and target are the same canvas
     let image_data = self.read_pixels(source_rect.to_i32(), image_size);
@@ -601,8 +683,8 @@ impl Context2d {
           dest_rect,
           self.state.global_alpha,
           smoothing_enabled,
-        );
-      });
+        )
+      })
     } else {
       // Writes on target canvas
       write_image(
@@ -612,7 +694,7 @@ impl Context2d {
         dest_rect,
         self.state.global_alpha,
         smoothing_enabled,
-      );
+      )
     }
   }
 
@@ -749,7 +831,7 @@ impl Context2d {
       return;
     }
 
-    assert_eq!(
+    debug_assert_eq!(
       image_data_size.width * image_data_size.height * 4.0,
       imagedata.len() as f64
     );
@@ -926,9 +1008,9 @@ fn write_image(
   dest_rect: Rect<f64>,
   global_alpha: f64,
   smoothing_enabled: bool,
-) {
+) -> Result<(), Context2DError> {
   if image_data.is_empty() {
-    return;
+    return Ok(());
   }
 
   // From spec https://html.spec.whatwg.org/multipage/#dom-context-2d-drawimage
@@ -941,17 +1023,22 @@ fn write_image(
     Filter::Fast
   };
 
-  if let Ok(source_surface) = ImageSurface::create_from_png(&mut image_data.as_slice()) {
-    let scale_x = image_size.width / dest_rect.size.width;
-    let scale_y = image_size.height / dest_rect.size.height;
-    cairo_ctx.set_source_surface(&source_surface, dest_rect.origin.x, dest_rect.origin.y);
-    let pattern = cairo_ctx.get_source();
-    pattern.set_filter(filter);
-    let mut matrix = pattern.get_matrix();
-    matrix.scale(scale_x, scale_y);
-    pattern.set_matrix(matrix);
-    cairo_ctx.paint_with_alpha(global_alpha);
-  }
+  let source_surface = try!(
+    ImageSurface::create_from_png(&mut image_data.as_slice()).map_err(|_| Context2DError {
+      reason: "Cairo create_from_png fail in write_image fail".to_owned()
+    })
+  );
+
+  let scale_x = image_size.width / dest_rect.size.width;
+  let scale_y = image_size.height / dest_rect.size.height;
+  cairo_ctx.set_source_surface(&source_surface, dest_rect.origin.x, dest_rect.origin.y);
+  let pattern = cairo_ctx.get_source();
+  pattern.set_filter(filter);
+  let mut matrix = pattern.get_matrix();
+  matrix.scale(scale_x, scale_y);
+  pattern.set_matrix(matrix);
+  cairo_ctx.paint_with_alpha(global_alpha);
+  Ok(())
 }
 
 pub trait ToCairoStyle {
