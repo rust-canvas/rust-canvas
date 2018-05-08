@@ -40,6 +40,14 @@ pub struct Context2DError {
   reason: String,
 }
 
+impl Context2DError {
+  pub fn new(reason: &str) -> Context2DError {
+    Context2DError {
+      reason: reason.to_owned(),
+    }
+  }
+}
+
 impl Display for Context2DError {
   fn fmt(&self, f: &mut Formatter) -> FmtResult {
     write!(f, "{}", self.reason)
