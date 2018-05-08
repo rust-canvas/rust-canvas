@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::error::Error;
@@ -28,7 +27,7 @@ use fontrenderer::flip_text;
 static NEXT_FONT_KEY: AtomicUsize = ATOMIC_USIZE_INIT;
 
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
-struct FontKey(usize);
+pub struct FontKey(usize);
 
 impl FontKey {
   fn new() -> FontKey {
@@ -53,12 +52,45 @@ impl Error for Context2DError {
   }
 }
 
+pub struct GlobalFontContext {
+  font_context: FontContext<FontKey>,
+  font_caches: BTreeMap<String, FontKey>,
+}
+
+unsafe impl Send for GlobalFontContext {}
+unsafe impl Sync for GlobalFontContext {}
+
+lazy_static! {
+  static ref GLOBAL_FONT_CONTEXT: GlobalFontContext = {
+    let mut font_context = FontContext::new().unwrap();
+    let mut font_caches = BTreeMap::new();
+    system_fonts::query_all().into_iter().for_each(|font| {
+      let font_property = system_fonts::FontPropertyBuilder::new()
+        .family(&font)
+        .build();
+      let (buffer, _) = system_fonts::get(&font_property).unwrap();
+      match font_caches.entry(font) {
+        Entry::Occupied(_) => (),
+        Entry::Vacant(entry) => {
+          let font_key = FontKey::new();
+          font_context
+            .add_font_from_memory(&font_key, Arc::new(buffer), 0)
+            .unwrap();
+          entry.insert(font_key);
+        }
+      }
+    });
+    GlobalFontContext {
+      font_context,
+      font_caches,
+    }
+  };
+}
+
 pub struct Context2d {
   pub state: PaintState,
   saved_states: Vec<PaintState>,
   pub cairo_ctx: Context,
-  font_context: RefCell<FontContext<FontKey>>,
-  font_caches: BTreeMap<String, FontKey>,
 }
 
 impl Context2d {
@@ -79,24 +111,11 @@ impl Context2d {
     );
     let cairo_ctx = Context::new(&image_surface);
 
-    let mut ctx = Context2d {
+    Ok(Context2d {
       state: PaintState::new(),
       saved_states: vec![],
       cairo_ctx,
-      font_context: RefCell::new(try!(FontContext::new().map_err(|()| Context2DError {
-        reason: "Pathfinder create FontContext fail".to_owned()
-      }))),
-      font_caches: BTreeMap::new(),
-    };
-    system_fonts::query_all().into_iter().for_each(|font| {
-      let font_property = system_fonts::FontPropertyBuilder::new()
-        .family(&font)
-        .build();
-      let (buffer, _) = system_fonts::get(&font_property).unwrap();
-      ctx.add_font_instance(buffer, font).unwrap();
-    });
-
-    Ok(ctx)
+    })
   }
 
   pub fn start(size: Size2D<i32>) -> Sender<CanvasMsg> {
@@ -196,23 +215,6 @@ impl Context2d {
     }
   }
 
-  pub fn add_font_instance(&mut self, bytes: Vec<u8>, family_name: String) -> Result<(), ()> {
-    match self.font_caches.entry(family_name) {
-      Entry::Occupied(_) => Ok(()),
-      Entry::Vacant(entry) => {
-        let font_key = FontKey::new();
-        try!(
-          self
-            .font_context
-            .borrow_mut()
-            .add_font_from_memory(&font_key, Arc::new(bytes), 0)
-        );
-        entry.insert(font_key);
-        Ok(())
-      }
-    }
-  }
-
   pub fn save_context_state(&mut self) {
     self.saved_states.push(self.state.clone());
     self.cairo_ctx.save();
@@ -258,7 +260,7 @@ impl Context2d {
   ) -> Result<(), Context2DError> {
     let font = &self.state.font;
     let family = &font.font_family;
-    let font_keys = &self.font_caches;
+    let font_keys = &GLOBAL_FONT_CONTEXT.font_caches;
     let size = &font.font_size;
     let font_key = match font_keys.get(family) {
       Some(f) => f,
@@ -273,7 +275,7 @@ impl Context2d {
         let total_width = text
           .chars()
           .map(|c| {
-            let font_context = self.font_context.borrow();
+            let font_context = &GLOBAL_FONT_CONTEXT.font_context;
             let pos = try!(
               font_context
                 .get_char_index(&font_key, c)
@@ -301,7 +303,7 @@ impl Context2d {
       None => 1.0,
     };
     for c in text.chars() {
-      let font_context = self.font_context.borrow();
+      let font_context = &GLOBAL_FONT_CONTEXT.font_context;
       let pos = try!(
         font_context
           .get_char_index(&font_key, c)

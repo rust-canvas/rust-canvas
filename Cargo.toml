@@ -9,6 +9,7 @@ cairo-rs = { git = "https://github.com/gtk-rs/cairo", branch = "master", feature
 cssparser = { version = "0.23", features = ["serde"] }
 euclid = { version = "0.17", features = ["serde"] }
 font-loader = "0.6"
+lazy_static = "1.0"
 lyon_path = "0.10"
 num-traits = "0.1"
 pathfinder_font_renderer = { version = "0.3", git = "https://github.com/rust-canvas/pathfinder", branch = "rust-canvas", features = ["freetype-backend"] }

@@ -3,6 +3,8 @@ extern crate cairo;
 extern crate cssparser;
 extern crate euclid;
 extern crate font_loader as fonts;
+#[macro_use]
+extern crate lazy_static;
 extern crate lyon_path;
 extern crate num_traits;
 extern crate pathfinder_font_renderer;
