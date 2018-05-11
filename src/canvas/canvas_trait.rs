@@ -69,6 +69,7 @@ pub enum Canvas2dMsg {
   Arc(Point2D<f64>, f64, f64, f64, bool),
   ArcTo(Point2D<f64>, Point2D<f64>, f64),
   DrawImage(Vec<u8>, Size2D<f64>, Rect<f64>, Rect<f64>, bool),
+  DrawImageURI(String, Size2D<f64>, Rect<f64>, Rect<f64>, bool),
   DrawImageSelf(Size2D<f64>, Rect<f64>, Rect<f64>, bool),
   BeginPath,
   BezierCurveTo(Point2D<f64>, Point2D<f64>, Point2D<f64>),

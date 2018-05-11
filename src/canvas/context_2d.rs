@@ -220,6 +220,9 @@ impl Context2d {
       Canvas2dMsg::SetShadowBlur(value) => Ok(self.set_shadow_blur(value)),
       Canvas2dMsg::SetShadowColor(color) => Ok(self.set_shadow_color(color)),
       Canvas2dMsg::NotImplement => Ok(()),
+      _ => Err(Context2DError {
+        reason: "Not Implement Error".to_owned(),
+      }),
     }
   }
 
