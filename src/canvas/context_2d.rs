@@ -164,11 +164,11 @@ impl Context2d {
       Canvas2dMsg::Fill => Ok(self.fill()),
       Canvas2dMsg::Stroke => Ok(self.stroke()),
       Canvas2dMsg::Clip => Ok(self.clip()),
-      Canvas2dMsg::IsPointInPath(x, y, fill_rule, chan) => chan
-        .send(self.is_point_in_path(x, y, fill_rule))
-        .map_err(|err| Context2DError {
-          reason: format!("{}", err),
-        }),
+      // Canvas2dMsg::IsPointInPath(x, y, fill_rule, chan) => chan
+      //   .send(self.is_point_in_path(x, y, fill_rule))
+      //   .map_err(|err| Context2DError {
+      //     reason: format!("{}", err),
+      //   }),
       Canvas2dMsg::DrawImage(imagedata, image_size, dest_rect, source_rect, smoothing_enabled) => {
         self.draw_image(
           imagedata,
@@ -207,11 +207,11 @@ impl Context2d {
       Canvas2dMsg::SetTransform(ref matrix) => Ok(self.set_transform(matrix)),
       Canvas2dMsg::SetGlobalAlpha(alpha) => Ok(self.set_global_alpha(alpha)),
       Canvas2dMsg::SetGlobalComposition(op) => Ok(self.set_global_composition(op)),
-      Canvas2dMsg::GetImageData(dest_rect, canvas_size, chan) => chan
-        .send(self.image_data(dest_rect, canvas_size))
-        .map_err(|err| Context2DError {
-          reason: format!("{}", err),
-        }),
+      // Canvas2dMsg::GetImageData(dest_rect, canvas_size, chan) => chan
+      //   .send(self.image_data(dest_rect, canvas_size))
+      //   .map_err(|err| Context2DError {
+      //     reason: format!("{}", err),
+      //   }),
       Canvas2dMsg::PutImageData(imagedata, offset, image_data_size, dirty_rect) => {
         Ok(self.put_image_data(imagedata, offset, image_data_size, dirty_rect))
       }

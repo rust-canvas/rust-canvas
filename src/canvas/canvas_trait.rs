@@ -64,7 +64,7 @@ pub enum FromScriptMsg {
   SendPixels(Sender<Option<Vec<u8>>>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub enum Canvas2dMsg {
   Arc(Point2D<f64>, f64, f64, f64, bool),
   ArcTo(Point2D<f64>, Point2D<f64>, f64),
@@ -79,8 +79,6 @@ pub enum Canvas2dMsg {
   Fill,
   FillText(String, f32, f32, Option<f32>),
   FillRect(Rect<f64>),
-  GetImageData(Rect<i32>, Size2D<f64>, Sender<Vec<u8>>),
-  IsPointInPath(f64, f64, FillRule, Sender<bool>),
   LineTo(Point2D<f64>),
   MoveTo(Point2D<f64>),
   PutImageData(Vec<u8>, Vector2D<f64>, Size2D<f64>, Rect<f64>),
