@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use csshelper::parse_fonts_style;
 
 #[derive(Debug, Clone)]
@@ -8,9 +10,11 @@ pub struct Font {
   pub font_variant: FontVariant,
 }
 
-impl Font {
-  pub fn new(font_rules: &str) -> Font {
-    parse_fonts_style(font_rules)
+impl FromStr for Font {
+  type Err = ();
+
+  fn from_str(rules: &str) -> Result<Font, ()> {
+    Ok(parse_fonts_style(rules))
   }
 }
 

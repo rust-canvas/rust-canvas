@@ -198,7 +198,7 @@ impl Context2d {
       Canvas2dMsg::RestoreContext => Ok(self.restore_context_state()),
       Canvas2dMsg::SaveContext => Ok(self.save_context_state()),
       Canvas2dMsg::SetFillStyle(style) => Ok(self.set_fill_style(style)),
-      Canvas2dMsg::SetFontStyle(font_rule) => Ok(self.set_font_style(&font_rule)),
+      Canvas2dMsg::SetFontStyle(font_rule) => Ok(try!(self.set_font_style(&font_rule))),
       Canvas2dMsg::SetStrokeStyle(style) => Ok(self.set_stroke_style(style)),
       Canvas2dMsg::SetLineWidth(width) => Ok(self.set_line_width(width)),
       Canvas2dMsg::SetLineCap(cap) => Ok(self.set_line_cap(cap)),
@@ -269,108 +269,10 @@ impl Context2d {
     y: f32,
     max_width: Option<f32>,
   ) -> Result<(), Context2DError> {
-    let font = &self.state.font;
-    let family = &font.font_family;
-    let font_keys = &GLOBAL_FONT_CONTEXT.font_caches;
-    let size = &font.font_size;
-    let font_key = match font_keys.get(family) {
-      Some(f) => f,
-      None => try!(font_keys.get(SANS_SERIF_FONT_FAMILY).ok_or(Context2DError {
-        reason: "Font fallback error, can not found any default font".to_owned()
-      })),
-    };
-    let instance = FontInstance::new(font_key, Au::from_px(*size as i32));
-    let mut offset_x = x;
-    let scale = match max_width {
-      Some(m) => {
-        let total_width = text
-          .chars()
-          .map(|c| {
-            let font_context = &GLOBAL_FONT_CONTEXT.font_context;
-            let pos = try!(
-              font_context
-                .get_char_index(&font_key, c)
-                .ok_or(Context2DError {
-                  reason: "Pathfinder get char index fail".to_owned()
-                })
-            );
-            let glyph_key = GlyphKey::new(pos, SubpixelOffset(0));
-            let glyph_dimensions = try!(
-              font_context
-                .glyph_dimensions(&instance, &glyph_key, false)
-                .map_err(|()| Context2DError {
-                  reason: "Pathfinder glyph_dimensions fail".to_owned()
-                })
-            );
-            Ok(glyph_dimensions.advance)
-          })
-          .sum::<Result<f32, Context2DError>>();
-        if try!(total_width) > m {
-          m / try!(total_width)
-        } else {
-          1.0
-        }
-      }
-      None => 1.0,
-    };
-    for c in text.chars() {
-      let font_context = &GLOBAL_FONT_CONTEXT.font_context;
-      let pos = try!(
-        font_context
-          .get_char_index(&font_key, c)
-          .ok_or(Context2DError {
-            reason: "Get Char index font_context fail".to_owned()
-          })
-      );
-      let glyph_key = GlyphKey::new(pos, SubpixelOffset(0));
-      let glyph_dimensions = try!(
-        font_context
-          .glyph_dimensions(&instance, &glyph_key, false)
-          .map_err(|()| Context2DError {
-            reason: "Get glyph dimensions fail".to_owned()
-          })
-      );
-      let text_width = glyph_dimensions.size.width;
-      let advance = glyph_dimensions.advance;
-      let advance_offset = advance / 2.0 * scale;
-      offset_x = offset_x + advance_offset;
-      let text_width = text_width as f32 * scale;
-      let glyph_outline = try!(
-        font_context
-          .glyph_outline(&instance, &glyph_key)
-          .map_err(|()| Context2DError {
-            reason: "Pathfinder glyph_outline fail".to_owned()
-          })
-      );
-      glyph_outline
-        .iter()
-        .map(|e| flip_text(scale)(e))
-        .for_each(|f| match f {
-          PathEvent::MoveTo(p) => {
-            self.move_to(&Point2D::new((p.x + offset_x) as f64, (p.y + y) as f64))
-          }
-          PathEvent::LineTo(p) => {
-            self.line_to(&Point2D::new((p.x + offset_x) as f64, (p.y + y) as f64))
-          }
-          PathEvent::QuadraticTo(cp, ep) => self.quadratic_curve_to(
-            &Point2D::new((cp.x + offset_x) as f64, (cp.y + y) as f64),
-            &Point2D::new((ep.x + offset_x) as f64, (ep.y + y) as f64),
-          ),
-          PathEvent::Close => self.close_path(),
-          PathEvent::CubicTo(cp1, cp2, ep) => self.bezier_curve_to(
-            &Point2D::new((cp1.x + offset_x) as f64, (cp1.y + y) as f64),
-            &Point2D::new((cp2.x + offset_x) as f64, (cp2.y + y) as f64),
-            &Point2D::new((ep.x + offset_x) as f64, (ep.y + y) as f64),
-          ),
-          PathEvent::Arc(c, r, s, e) => self.arc(
-            &Point2D::new((c.x + offset_x) as f64, (c.y + y) as f64),
-            r.angle_from_x_axis().get() as f64,
-            s.get() as f64,
-            e.get() as f64,
-            false,
-          ),
-        });
-      offset_x = offset_x + advance_offset + text_width;
+    let font = self.state.font.clone();
+    let commands = try!(draw_text_commands(&text, x, y, max_width, &font));
+    for message in commands {
+      try!(self.handle_canvas2d_msg(message));
     }
     Ok(())
   }
@@ -556,8 +458,13 @@ impl Context2d {
     }
   }
 
-  pub fn set_font_style(&mut self, font_style: &str) {
-    self.state.font = Font::new(font_style);
+  pub fn set_font_style(&mut self, font_style: &str) -> Result<(), Context2DError> {
+    self.state.font = try!(
+      font_style
+        .parse::<Font>()
+        .map_err(|_| Context2DError::new("Parse font_style error"))
+    );
+    Ok(())
   }
 
   pub fn set_stroke_style(&self, style: FillOrStrokeStyle) {
@@ -1220,16 +1127,127 @@ impl ToCairoStyle for Transform2D<f64> {
   }
 }
 
-pub fn byte_swap(data: &mut [u8]) {
-  let length = data.len();
-  // FIXME(rust #27741): Range::step_by is not stable yet as of this writing.
-  let mut i = 0;
-  while i < length {
-    let r = data[i + 2];
-    data[i + 2] = data[i + 0];
-    data[i + 0] = r;
-    i += 4;
+pub fn draw_text_commands(
+  text: &str,
+  x: f32,
+  y: f32,
+  max_width: Option<f32>,
+  font: &Font,
+) -> Result<Vec<Canvas2dMsg>, Context2DError> {
+  let family = &font.font_family;
+  let font_keys = &GLOBAL_FONT_CONTEXT.font_caches;
+  let size = &font.font_size;
+  let font_key = match font_keys.get(family) {
+    Some(f) => f,
+    None => try!(font_keys.get(SANS_SERIF_FONT_FAMILY).ok_or(Context2DError {
+      reason: "Font fallback error, can not found any default font".to_owned()
+    })),
+  };
+  let instance = FontInstance::new(font_key, Au::from_px(*size as i32));
+  let mut offset_x = x;
+  let scale = match max_width {
+    Some(m) => {
+      let total_width = text
+        .chars()
+        .map(|c| {
+          let font_context = &GLOBAL_FONT_CONTEXT.font_context;
+          let pos = try!(
+            font_context
+              .get_char_index(&font_key, c)
+              .ok_or(Context2DError {
+                reason: "Pathfinder get char index fail".to_owned()
+              })
+          );
+          let glyph_key = GlyphKey::new(pos, SubpixelOffset(0));
+          let glyph_dimensions = try!(
+            font_context
+              .glyph_dimensions(&instance, &glyph_key, false)
+              .map_err(|()| Context2DError {
+                reason: "Pathfinder glyph_dimensions fail".to_owned()
+              })
+          );
+          Ok(glyph_dimensions.advance)
+        })
+        .sum::<Result<f32, Context2DError>>();
+      if try!(total_width) > m {
+        m / try!(total_width)
+      } else {
+        1.0
+      }
+    }
+    None => 1.0,
+  };
+  let mut dist = vec![];
+  for c in text.chars() {
+    let font_context = &GLOBAL_FONT_CONTEXT.font_context;
+    let pos = try!(
+      font_context
+        .get_char_index(&font_key, c)
+        .ok_or(Context2DError {
+          reason: "Get Char index font_context fail".to_owned()
+        })
+    );
+    let glyph_key = GlyphKey::new(pos, SubpixelOffset(0));
+    let glyph_dimensions = try!(
+      font_context
+        .glyph_dimensions(&instance, &glyph_key, false)
+        .map_err(|()| Context2DError {
+          reason: "Get glyph dimensions fail".to_owned()
+        })
+    );
+    let text_width = glyph_dimensions.size.width;
+    let advance = glyph_dimensions.advance;
+    let advance_offset = advance / 2.0 * scale;
+    offset_x = offset_x + advance_offset;
+    let text_width = text_width as f32 * scale;
+    let glyph_outline = try!(
+      font_context
+        .glyph_outline(&instance, &glyph_key)
+        .map_err(|()| Context2DError {
+          reason: "Pathfinder glyph_outline fail".to_owned()
+        })
+    );
+    glyph_outline
+      .iter()
+      .map(|e| flip_text(scale)(e))
+      .for_each(|f| match f {
+        PathEvent::MoveTo(p) => {
+          dist.push(Canvas2dMsg::MoveTo(Point2D::new(
+            (p.x + offset_x) as f64,
+            (p.y + y) as f64,
+          )));
+        }
+        PathEvent::LineTo(p) => {
+          dist.push(Canvas2dMsg::LineTo(Point2D::new(
+            (p.x + offset_x) as f64,
+            (p.y + y) as f64,
+          )));
+        }
+        PathEvent::QuadraticTo(cp, ep) => dist.push(Canvas2dMsg::QuadraticCurveTo(
+          Point2D::new((cp.x + offset_x) as f64, (cp.y + y) as f64),
+          Point2D::new((ep.x + offset_x) as f64, (ep.y + y) as f64),
+        )),
+        PathEvent::Close => dist.push(Canvas2dMsg::ClosePath),
+        PathEvent::CubicTo(cp1, cp2, ep) => {
+          dist.push(Canvas2dMsg::BezierCurveTo(
+            Point2D::new((cp1.x + offset_x) as f64, (cp1.y + y) as f64),
+            Point2D::new((cp2.x + offset_x) as f64, (cp2.y + y) as f64),
+            Point2D::new((ep.x + offset_x) as f64, (ep.y + y) as f64),
+          ));
+        }
+        PathEvent::Arc(c, r, s, e) => {
+          dist.push(Canvas2dMsg::Arc(
+            Point2D::new((c.x + offset_x) as f64, (c.y + y) as f64),
+            r.angle_from_x_axis().get() as f64,
+            s.get() as f64,
+            e.get() as f64,
+            false,
+          ));
+        }
+      });
+    offset_x = offset_x + advance_offset + text_width;
   }
+  Ok(dist)
 }
 
 #[cfg(test)]

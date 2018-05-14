@@ -26,7 +26,7 @@ impl Default for PaintState {
     PaintState {
       fill_style,
       stroke_style,
-      font: Font::new("10px sans-serif"),
+      font: "10px sans-serif".parse::<Font>().unwrap(),
       transform: Transform2D::identity(),
       global_alpha: 1.0f64,
       shadow_offset_x: 0.0,
