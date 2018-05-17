@@ -1,8 +1,10 @@
+use std::cell::RefCell;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::mem;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::Arc;
@@ -61,8 +63,25 @@ impl Error for Context2DError {
 }
 
 pub struct GlobalFontContext {
-  font_context: FontContext<FontKey>,
-  font_caches: BTreeMap<String, FontKey>,
+  font_context: Rc<RefCell<FontContext<FontKey>>>,
+  font_caches: Rc<RefCell<BTreeMap<String, FontKey>>>,
+}
+
+impl GlobalFontContext {
+  fn add_font_from_memory(&self, name: String, buffer: Vec<u8>) {
+    let mut font_caches = self.font_caches.borrow_mut();
+    let mut font_context = self.font_context.borrow_mut();
+    match font_caches.entry(name) {
+      Entry::Occupied(_) => (),
+      Entry::Vacant(entry) => {
+        let font_key = FontKey::new();
+        font_context
+          .add_font_from_memory(&font_key, Arc::new(buffer), 0)
+          .unwrap();
+        entry.insert(font_key);
+      }
+    }
+  }
 }
 
 unsafe impl Send for GlobalFontContext {}
@@ -89,10 +108,14 @@ lazy_static! {
       }
     });
     GlobalFontContext {
-      font_context,
-      font_caches,
+      font_context: Rc::new(RefCell::new(font_context)),
+      font_caches: Rc::new(RefCell::new(font_caches)),
     }
   };
+}
+
+pub fn add_global_font(name: String, buffer: Vec<u8>) {
+  GLOBAL_FONT_CONTEXT.add_font_from_memory(name, buffer)
 }
 
 pub struct Context2d {
@@ -140,6 +163,9 @@ impl Context2d {
                 .handle_canvas2d_msg(message)
                 .expect("Handle canvas2d msg error");
             }
+            CanvasMsg::GetImageData(dest_rect, canvas_size, sender) => sender
+              .send(painter.image_data(dest_rect, canvas_size))
+              .expect("GetImage Data from channel fail"),
             CanvasMsg::Close => break,
             CanvasMsg::FromScript(message) => match message {
               FromScriptMsg::SendPixels(chan) => painter.send_pixels(chan),
@@ -1135,7 +1161,7 @@ pub fn draw_text_commands(
   font: &Font,
 ) -> Result<Vec<Canvas2dMsg>, Context2DError> {
   let family = &font.font_family;
-  let font_keys = &GLOBAL_FONT_CONTEXT.font_caches;
+  let font_keys = GLOBAL_FONT_CONTEXT.font_caches.borrow();
   let size = &font.font_size;
   let font_key = match font_keys.get(family) {
     Some(f) => f,
@@ -1150,7 +1176,7 @@ pub fn draw_text_commands(
       let total_width = text
         .chars()
         .map(|c| {
-          let font_context = &GLOBAL_FONT_CONTEXT.font_context;
+          let font_context = GLOBAL_FONT_CONTEXT.font_context.borrow();
           let pos = try!(
             font_context
               .get_char_index(&font_key, c)
@@ -1179,7 +1205,7 @@ pub fn draw_text_commands(
   };
   let mut dist = vec![];
   for c in text.chars() {
-    let font_context = &GLOBAL_FONT_CONTEXT.font_context;
+    let font_context = GLOBAL_FONT_CONTEXT.font_context.borrow();
     let pos = try!(
       font_context
         .get_char_index(&font_key, c)

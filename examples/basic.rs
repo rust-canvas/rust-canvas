@@ -9,12 +9,17 @@ use std::sync::mpsc::channel;
 
 use cssparser::RGBA;
 use euclid::{Point2D, Rect, Size2D};
-use rustcanvas::{create_canvas, Canvas2dMsg, CanvasContextType, CanvasMsg, FillOrStrokeStyle};
+use rustcanvas::{
+  add_global_font_cache, create_canvas, Canvas2dMsg, CanvasContextType, CanvasMsg,
+  FillOrStrokeStyle,
+};
 
 fn main() {
   let canvas = create_canvas(1920, 1080, CanvasContextType::CTX2D);
   let renderer = canvas.ctx;
   let (sender, receiver) = channel::<Vec<u8>>();
+  let fonts_file = include_bytes!("./fixtures/Parisienne.ttf");
+  add_global_font_cache("Parisienne".to_owned(), fonts_file.to_vec());
   renderer
     .send(CanvasMsg::Canvas2d(Canvas2dMsg::SetLineWidth(10.0)))
     .unwrap();
@@ -119,7 +124,7 @@ fn main() {
     .unwrap();
   renderer
     .send(CanvasMsg::Canvas2d(Canvas2dMsg::SetFontStyle(
-      "200px \"Monaco\"".to_string(),
+      "200px \"Parisienne\"".to_string(),
     )))
     .unwrap();
   renderer
@@ -134,11 +139,11 @@ fn main() {
   let size_i32 = canvas_size.to_i32();
 
   renderer
-    .send(CanvasMsg::Canvas2d(Canvas2dMsg::GetImageData(
+    .send(CanvasMsg::GetImageData(
       Rect::new(Point2D::new(0i32, 0i32), size_i32),
       canvas_size,
       sender,
-    )))
+    ))
     .unwrap();
 
   renderer.send(CanvasMsg::Close).unwrap();

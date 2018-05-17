@@ -55,6 +55,7 @@ impl Debug for CairoPattern {
 #[derive(Clone, Debug)]
 pub enum CanvasMsg {
   Canvas2d(Canvas2dMsg),
+  GetImageData(Rect<i32>, Size2D<f64>, Sender<Vec<u8>>),
   FromScript(FromScriptMsg),
   Close,
 }
