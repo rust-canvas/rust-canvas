@@ -190,11 +190,6 @@ impl Context2d {
       Canvas2dMsg::Fill => Ok(self.fill()),
       Canvas2dMsg::Stroke => Ok(self.stroke()),
       Canvas2dMsg::Clip => Ok(self.clip()),
-      // Canvas2dMsg::IsPointInPath(x, y, fill_rule, chan) => chan
-      //   .send(self.is_point_in_path(x, y, fill_rule))
-      //   .map_err(|err| Context2DError {
-      //     reason: format!("{}", err),
-      //   }),
       Canvas2dMsg::DrawImage(imagedata, image_size, dest_rect, source_rect, smoothing_enabled) => {
         self.draw_image(
           imagedata,
@@ -221,6 +216,9 @@ impl Context2d {
       Canvas2dMsg::Ellipse(ref center, radius_x, radius_y, rotation, start, end, ccw) => {
         Ok(self.ellipse(center, radius_x, radius_y, rotation, start, end, ccw))
       }
+      Canvas2dMsg::Transform(ref matrix) => Ok(self.transform(matrix)),
+      Canvas2dMsg::Translate(x, y) => Ok(self.translate(x, y)),
+      Canvas2dMsg::Rotate(a) => Ok(self.rotate(a)),
       Canvas2dMsg::RestoreContext => Ok(self.restore_context_state()),
       Canvas2dMsg::SaveContext => Ok(self.save_context_state()),
       Canvas2dMsg::SetFillStyle(style) => Ok(self.set_fill_style(style)),
@@ -230,14 +228,8 @@ impl Context2d {
       Canvas2dMsg::SetLineCap(cap) => Ok(self.set_line_cap(cap)),
       Canvas2dMsg::SetLineJoin(join) => Ok(self.set_line_join(join)),
       Canvas2dMsg::SetMiterLimit(limit) => Ok(self.set_miter_limit(limit)),
-      Canvas2dMsg::SetTransform(ref matrix) => Ok(self.set_transform(matrix)),
       Canvas2dMsg::SetGlobalAlpha(alpha) => Ok(self.set_global_alpha(alpha)),
       Canvas2dMsg::SetGlobalComposition(op) => Ok(self.set_global_composition(op)),
-      // Canvas2dMsg::GetImageData(dest_rect, canvas_size, chan) => chan
-      //   .send(self.image_data(dest_rect, canvas_size))
-      //   .map_err(|err| Context2DError {
-      //     reason: format!("{}", err),
-      //   }),
       Canvas2dMsg::PutImageData(imagedata, offset, image_data_size, dirty_rect) => {
         Ok(self.put_image_data(imagedata, offset, image_data_size, dirty_rect))
       }
@@ -394,6 +386,10 @@ impl Context2d {
       return; // Paint nothing if gradient size is zero.
     }
 
+    if self.state.global_alpha == 0.0 {
+      return;
+    }
+
     self.cairo_ctx.fill();
   }
 
@@ -521,14 +517,20 @@ impl Context2d {
     self.cairo_ctx.set_miter_limit(limit);
   }
 
-  pub fn set_transform(&mut self, transform: &Transform2D<f64>) {
-    self.state.transform = transform.clone();
+  pub fn transform(&self, transform: &Transform2D<f64>) {
     self.cairo_ctx.transform(transform.to_cairo_style());
+  }
+
+  pub fn translate(&self, x: f64, y: f64) {
+    self.cairo_ctx.translate(x, y);
+  }
+
+  pub fn rotate(&self, a: f64) {
+    self.cairo_ctx.rotate(a);
   }
 
   pub fn set_global_alpha(&mut self, alpha: f64) {
     self.state.global_alpha = alpha;
-    self.cairo_ctx.paint_with_alpha(alpha)
   }
 
   pub fn set_global_composition(&self, op: CompositionOrBlending) {
