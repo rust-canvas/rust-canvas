@@ -4,7 +4,6 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::mem;
-use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::Arc;
@@ -63,8 +62,8 @@ impl Error for Context2DError {
 }
 
 pub struct GlobalFontContext {
-  font_context: Rc<RefCell<FontContext<FontKey>>>,
-  font_caches: Rc<RefCell<BTreeMap<String, FontKey>>>,
+  font_context: Arc<RefCell<FontContext<FontKey>>>,
+  font_caches: Arc<RefCell<BTreeMap<String, FontKey>>>,
 }
 
 impl GlobalFontContext {
@@ -108,8 +107,8 @@ lazy_static! {
       }
     });
     GlobalFontContext {
-      font_context: Rc::new(RefCell::new(font_context)),
-      font_caches: Rc::new(RefCell::new(font_caches)),
+      font_context: Arc::new(RefCell::new(font_context)),
+      font_caches: Arc::new(RefCell::new(font_caches)),
     }
   };
 }
