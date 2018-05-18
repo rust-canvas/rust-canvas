@@ -1235,6 +1235,7 @@ pub fn draw_text_commands(
           reason: "Pathfinder glyph_outline fail".to_owned()
         })
     );
+    dist.push(Canvas2dMsg::BeginPath);
     glyph_outline
       .iter()
       .map(|e| flip_text(scale)(e))
