@@ -262,7 +262,7 @@ impl Context2d {
     y: f32,
     max_width: Option<f32>,
   ) -> Result<(), Context2DError> {
-    try!(self.draw_text(text, x, y, max_width));
+    try!(self.draw_text(text, x, y, max_width, false));
     self.fill();
     Ok(())
   }
@@ -274,7 +274,7 @@ impl Context2d {
     y: f32,
     max_width: Option<f32>,
   ) -> Result<(), Context2DError> {
-    try!(self.draw_text(text, x, y, max_width));
+    try!(self.draw_text(text, x, y, max_width, true));
     self.stroke();
     Ok(())
   }
@@ -285,9 +285,10 @@ impl Context2d {
     x: f32,
     y: f32,
     max_width: Option<f32>,
+    stroke: bool,
   ) -> Result<(), Context2DError> {
     let font = self.state.font.clone();
-    let commands = try!(draw_text_commands(&text, x, y, max_width, &font));
+    let commands = try!(draw_text_commands(&text, x, y, max_width, &font, stroke));
     for message in commands {
       try!(self.handle_canvas2d_msg(message));
     }
@@ -555,7 +556,8 @@ impl Context2d {
   // https://html.spec.whatwg.org/multipage/#when-shadows-are-drawn
   fn need_to_draw_shadow(&self) -> bool {
     self.state.shadow_color.alpha != 0
-      && (self.state.shadow_offset_x != 0.0f64 || self.state.shadow_offset_y != 0.0f64
+      && (self.state.shadow_offset_x != 0.0f64
+        || self.state.shadow_offset_y != 0.0f64
         || self.state.shadow_blur != 0.0f64)
   }
 
@@ -1160,6 +1162,7 @@ pub fn draw_text_commands(
   y: f32,
   max_width: Option<f32>,
   font: &Font,
+  stroke: bool,
 ) -> Result<Vec<Canvas2dMsg>, Context2DError> {
   let family = &font.font_family;
   let font_keys = GLOBAL_FONT_CONTEXT.font_caches.borrow();
@@ -1273,6 +1276,12 @@ pub fn draw_text_commands(
           ));
         }
       });
+    let action = if stroke {
+      Canvas2dMsg::Stroke
+    } else {
+      Canvas2dMsg::Fill
+    };
+    dist.push(action);
     offset_x = offset_x + advance_offset + text_width;
   }
   Ok(dist)
