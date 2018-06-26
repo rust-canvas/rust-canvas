@@ -37,6 +37,6 @@ mod font_test {
 
   #[test]
   fn font_default_check() {
-    Font::new("10px sans-serif");
+    Font::from_str("10px sans-serif");
   }
 }
